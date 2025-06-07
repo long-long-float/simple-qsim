@@ -1,12 +1,15 @@
-use nalgebra::{Matrix2, Vector2};
+use std::fmt::Display;
+
+use anyhow::Result;
+use nalgebra::{DVector, Matrix2, Vector2};
 use nalgebra_sparse::convert::serial::{convert_csr_dense, convert_dense_coo};
 use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
 use num_complex::Complex;
 
 fn tensor_product(
-    x: &CooMatrix<Complex<f64>>,
-    y: &CooMatrix<Complex<f64>>,
-) -> CooMatrix<Complex<f64>> {
+    x: &CsrMatrix<Complex<f64>>,
+    y: &CsrMatrix<Complex<f64>>,
+) -> CsrMatrix<Complex<f64>> {
     let mut result = CooMatrix::new(x.nrows() * y.nrows(), x.ncols() * y.ncols());
 
     for (rx, cx, value_x) in x.triplet_iter() {
@@ -18,81 +21,186 @@ fn tensor_product(
         }
     }
 
-    result
+    CsrMatrix::from(&result)
 }
 
-fn main() {
+fn build_hadamard_matrix() -> CsrMatrix<Complex<f64>> {
     let root2 = 2.0_f64.sqrt();
-    let zero = Complex::new(0.0, 0.0);
     let one = Complex::new(1.0, 0.0);
-    let i_one = Complex::new(0.0, 1.0);
-
     let hadamard_coo = convert_dense_coo(&Matrix2::from_row_slice(&[
         one / root2,
         one / root2,
         one / root2,
         -one / root2,
     ]));
-    let hadamard = CsrMatrix::from(&hadamard_coo);
+    CsrMatrix::from(&hadamard_coo)
+}
 
-    let mut identity_coo = CooMatrix::new(2, 2);
-    identity_coo.push(0, 0, one);
-    identity_coo.push(1, 1, one);
-
-    // H (x) I
-    let hadamard0 = tensor_product(&hadamard_coo, &identity_coo);
-    let hadamard0 = CsrMatrix::from(&hadamard0);
-
+fn build_x_matrix() -> CsrMatrix<Complex<f64>> {
     let mut x_coo = CooMatrix::new(2, 2);
-    x_coo.push(0, 1, one);
-    x_coo.push(1, 0, one);
+    x_coo.push(0, 1, Complex::new(1.0, 0.0));
+    x_coo.push(1, 0, Complex::new(1.0, 0.0));
+    CsrMatrix::from(&x_coo)
+}
 
-    // |0><0|
-    let mut zero_zero = CooMatrix::new(2, 2);
-    zero_zero.push(0, 0, one);
+struct QState {
+    state: DVector<Complex<f64>>,
+}
 
-    // |1><1|
-    let mut one_one = CooMatrix::new(2, 2);
-    one_one.push(1, 1, one);
+impl QState {
+    fn from_str(qbits: &str) -> Result<Self> {
+        let index = usize::from_str_radix(qbits, 2)?;
+        let mut state = DVector::zeros(qbits.len().pow(2));
+        state[index] = Complex::new(1.0, 0.0);
 
-    // CNOT(0, 1) = |0><0| (x) I + |1><1| (x) X
-    let cnot01 = CsrMatrix::from(&tensor_product(&zero_zero, &identity_coo))
-        + CsrMatrix::from(&tensor_product(&one_one, &x_coo));
+        Ok(Self { state })
+    }
+}
 
-    let ctrl_h01 = CsrMatrix::from(&tensor_product(&zero_zero, &identity_coo))
-        + CsrMatrix::from(&tensor_product(&one_one, &hadamard_coo));
+impl Display for QState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let bin_width = self.state.len().ilog2() as usize;
 
-    // |0>
-    let q0 = Vector2::from_column_slice(&[one, zero]);
-    // |1>
-    let q1 = Vector2::from_column_slice(&[zero, one]);
-    // 1/sqrt(2) * (|0> + |1>)
-    let q_plus = Vector2::from_column_slice(&[one / root2, one / root2]);
-    // |i>
-    let q_i = Vector2::from_column_slice(&[one / root2, i_one / root2]);
+        for (i, value) in self.state.iter().enumerate() {
+            writeln!(f, "|{:0width$b}>: {}", i, value, width = bin_width)?;
+        }
 
-    // |00>
-    let mut q00 = CooMatrix::new(4, 1);
-    q00.push(0, 0, one);
-    let q00 = CsrMatrix::from(&q00);
+        Ok(())
+    }
+}
 
-    let result1 = &hadamard * &q0;
-    println!("{:}", result1);
+struct Circuit {
+    gates: Vec<CsrMatrix<Complex<f64>>>,
+    num_of_qbits: usize,
+}
 
-    let result2 = &hadamard * &q1;
-    println!("{:}", result2);
+impl Circuit {
+    fn new(num_of_qbits: usize) -> Self {
+        Self {
+            gates: Vec::new(),
+            num_of_qbits,
+        }
+    }
 
-    let result3 = &hadamard * &q_plus;
-    println!("{:}", result3);
+    fn check_and_revsere_index(&self, index: usize) -> Result<usize> {
+        if index >= self.num_of_qbits {
+            return Err(anyhow::anyhow!(
+                "Index out of bounds for the number of qubits {}",
+                self.num_of_qbits
+            ));
+        }
+        Ok(self.num_of_qbits - 1 - index)
+    }
 
-    let result4 = &hadamard * &q_i;
-    println!("{:}", result4);
+    #[allow(non_snake_case)]
+    fn H(mut self, index: usize) -> Result<Self> {
+        let index = self.check_and_revsere_index(index)?;
+
+        let h = build_hadamard_matrix();
+
+        let mut matrix = CsrMatrix::identity(1);
+        for i in 0..self.num_of_qbits {
+            if i == index {
+                matrix = tensor_product(&matrix, &h);
+            } else {
+                matrix = tensor_product(&matrix, &CsrMatrix::identity(2));
+            }
+        }
+
+        self.add_gate(matrix);
+        Ok(self)
+    }
+
+    fn control(
+        mut self,
+        control: usize,
+        target: usize,
+        gate: &CsrMatrix<Complex<f64>>,
+    ) -> Result<Self> {
+        let control = self.check_and_revsere_index(control)?;
+        let target = self.check_and_revsere_index(target)?;
+
+        if control == target {
+            return Err(anyhow::anyhow!(
+                "Control and target qubits cannot be the same"
+            ));
+        }
+
+        // |0><0|
+        let mut zero_zero = CooMatrix::new(2, 2);
+        zero_zero.push(0, 0, Complex::new(1.0, 0.0));
+        let zero_zero = CsrMatrix::from(&zero_zero);
+
+        // |1><1|
+        let mut one_one = CooMatrix::new(2, 2);
+        one_one.push(1, 1, Complex::new(1.0, 0.0));
+        let one_one = CsrMatrix::from(&one_one);
+
+        let x = build_x_matrix();
+        let id = CsrMatrix::identity(2);
+
+        // CNOT(0, 1) = |0><0| (x) I + |1><1| (x) X
+
+        let mut zero_matrix = CsrMatrix::identity(1);
+        let mut one_matrix = CsrMatrix::identity(1);
+        for i in 0..self.num_of_qbits {
+            if i == control {
+                zero_matrix = tensor_product(&zero_matrix, &zero_zero);
+                one_matrix = tensor_product(&one_matrix, &one_one);
+            } else if i == target {
+                zero_matrix = tensor_product(&zero_matrix, &id);
+                one_matrix = tensor_product(&one_matrix, gate);
+            } else {
+                zero_matrix = tensor_product(&zero_matrix, &id);
+                one_matrix = tensor_product(&one_matrix, &id);
+            }
+        }
+
+        let matrix = zero_matrix + one_matrix;
+        self.add_gate(matrix);
+        Ok(self)
+    }
+
+    fn cnot(self, control: usize, target: usize) -> Result<Self> {
+        self.control(control, target, &build_x_matrix())
+    }
+
+    fn add_gate(&mut self, gate: CsrMatrix<Complex<f64>>) {
+        self.gates.push(gate);
+    }
+
+    fn apply(&self, state: &QState) -> QState {
+        let mut result = state.state.clone();
+        for gate in &self.gates {
+            result = gate * result;
+        }
+        QState { state: result }
+    }
+}
+
+fn main() -> Result<()> {
+    let q00 = QState::from_str("00")?;
+    println!("{}", q00);
 
     // Bell state |00> + |11>
+    let result = Circuit::new(2).H(0)?.cnot(0, 1)?.apply(&q00);
+    println!("{}", result);
+
+    // Hadamard test
+    let result = Circuit::new(2)
+        .H(0)?
+        .control(0, 1, &build_hadamard_matrix())?
+        .H(0)?
+        .apply(&q00);
+    println!("{}", result);
+
+    Ok(())
+
+    /*
     let result5 = &cnot01 * (&hadamard0 * &q00);
     println!("{:}", convert_csr_dense(&result5));
 
-    // Hadamard test
     let result6 = &hadamard0 * (&ctrl_h01 * (&hadamard0 * &q00));
     println!("{:}", convert_csr_dense(&result6));
+    */
 }
