@@ -1,15 +1,14 @@
 use std::fmt::Display;
 
 use anyhow::Result;
-use nalgebra::{DVector, Matrix2, Vector2};
-use nalgebra_sparse::convert::serial::{convert_csr_dense, convert_dense_coo};
+use nalgebra::{DVector, Matrix2};
+use nalgebra_sparse::convert::serial::convert_dense_coo;
 use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
 use num_complex::Complex;
 
-fn tensor_product(
-    x: &CsrMatrix<Complex<f64>>,
-    y: &CsrMatrix<Complex<f64>>,
-) -> CsrMatrix<Complex<f64>> {
+type Qbit = Complex<f64>;
+
+fn tensor_product(x: &CsrMatrix<Qbit>, y: &CsrMatrix<Qbit>) -> CsrMatrix<Qbit> {
     let mut result = CooMatrix::new(x.nrows() * y.nrows(), x.ncols() * y.ncols());
 
     for (rx, cx, value_x) in x.triplet_iter() {
@@ -24,7 +23,7 @@ fn tensor_product(
     CsrMatrix::from(&result)
 }
 
-fn build_hadamard_matrix() -> CsrMatrix<Complex<f64>> {
+fn build_hadamard_matrix() -> CsrMatrix<Qbit> {
     let root2 = 2.0_f64.sqrt();
     let one = Complex::new(1.0, 0.0);
     let hadamard_coo = convert_dense_coo(&Matrix2::from_row_slice(&[
@@ -36,7 +35,7 @@ fn build_hadamard_matrix() -> CsrMatrix<Complex<f64>> {
     CsrMatrix::from(&hadamard_coo)
 }
 
-fn build_x_matrix() -> CsrMatrix<Complex<f64>> {
+fn build_x_matrix() -> CsrMatrix<Qbit> {
     let mut x_coo = CooMatrix::new(2, 2);
     x_coo.push(0, 1, Complex::new(1.0, 0.0));
     x_coo.push(1, 0, Complex::new(1.0, 0.0));
@@ -44,22 +43,26 @@ fn build_x_matrix() -> CsrMatrix<Complex<f64>> {
 }
 
 struct QState {
-    state: DVector<Complex<f64>>,
+    state: DVector<Qbit>,
 }
 
 impl QState {
     fn from_str(qbits: &str) -> Result<Self> {
         let index = usize::from_str_radix(qbits, 2)?;
-        let mut state = DVector::zeros(qbits.len().pow(2));
+        let mut state = DVector::zeros(2_usize.pow(qbits.len() as u32));
         state[index] = Complex::new(1.0, 0.0);
 
         Ok(Self { state })
+    }
+
+    fn len(&self) -> usize {
+        self.state.len().ilog2() as usize
     }
 }
 
 impl Display for QState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let bin_width = self.state.len().ilog2() as usize;
+        let bin_width = self.len();
 
         for (i, value) in self.state.iter().enumerate() {
             writeln!(f, "|{:0width$b}>: {}", i, value, width = bin_width)?;
@@ -70,7 +73,7 @@ impl Display for QState {
 }
 
 struct Circuit {
-    gates: Vec<CsrMatrix<Complex<f64>>>,
+    gates: Vec<CsrMatrix<Qbit>>,
     num_of_qbits: usize,
 }
 
@@ -111,12 +114,7 @@ impl Circuit {
         Ok(self)
     }
 
-    fn control(
-        mut self,
-        control: usize,
-        target: usize,
-        gate: &CsrMatrix<Complex<f64>>,
-    ) -> Result<Self> {
+    fn control(mut self, control: usize, target: usize, gate: &CsrMatrix<Qbit>) -> Result<Self> {
         let control = self.check_and_revsere_index(control)?;
         let target = self.check_and_revsere_index(target)?;
 
@@ -136,10 +134,7 @@ impl Circuit {
         one_one.push(1, 1, Complex::new(1.0, 0.0));
         let one_one = CsrMatrix::from(&one_one);
 
-        let x = build_x_matrix();
         let id = CsrMatrix::identity(2);
-
-        // CNOT(0, 1) = |0><0| (x) I + |1><1| (x) X
 
         let mut zero_matrix = CsrMatrix::identity(1);
         let mut one_matrix = CsrMatrix::identity(1);
@@ -165,7 +160,7 @@ impl Circuit {
         self.control(control, target, &build_x_matrix())
     }
 
-    fn add_gate(&mut self, gate: CsrMatrix<Complex<f64>>) {
+    fn add_gate(&mut self, gate: CsrMatrix<Qbit>) {
         self.gates.push(gate);
     }
 
@@ -183,11 +178,11 @@ fn main() -> Result<()> {
     println!("{}", q00);
 
     // Bell state |00> + |11>
-    let result = Circuit::new(2).H(0)?.cnot(0, 1)?.apply(&q00);
+    let result = Circuit::new(q00.len()).H(0)?.cnot(0, 1)?.apply(&q00);
     println!("{}", result);
 
     // Hadamard test
-    let result = Circuit::new(2)
+    let result = Circuit::new(q00.len())
         .H(0)?
         .control(0, 1, &build_hadamard_matrix())?
         .H(0)?
