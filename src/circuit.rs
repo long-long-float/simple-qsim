@@ -1,0 +1,220 @@
+use anyhow::Result;
+use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
+use num_complex::Complex;
+
+use crate::gates::{build_hadamard_matrix, build_x_matrix};
+use crate::qstate::QState;
+use crate::Qbit;
+
+pub struct Circuit {
+    gates: Vec<CsrMatrix<Qbit>>,
+    num_of_qbits: usize,
+}
+
+impl Circuit {
+    pub fn new(num_of_qbits: usize) -> Self {
+        Self {
+            gates: Vec::new(),
+            num_of_qbits,
+        }
+    }
+
+    pub fn check_and_revsere_index(&self, index: usize) -> Result<usize> {
+        if index >= self.num_of_qbits {
+            return Err(anyhow::anyhow!(
+                "Index out of bounds for the number of qubits {}",
+                self.num_of_qbits
+            ));
+        }
+        Ok(self.num_of_qbits - 1 - index)
+    }
+
+    pub fn add_gate_at(mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<Self> {
+        let index = self.check_and_revsere_index(index)?;
+
+        let mut matrix = CsrMatrix::identity(1);
+        for i in 0..self.num_of_qbits {
+            if i == index {
+                matrix = tensor_product(&matrix, &gate);
+            } else {
+                matrix = tensor_product(&matrix, &CsrMatrix::identity(2));
+            }
+        }
+
+        self.add_gate(matrix);
+        Ok(self)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn H(self, index: usize) -> Result<Self> {
+        self.add_gate_at(index, build_hadamard_matrix())
+    }
+
+    pub fn control(
+        mut self,
+        control: usize,
+        target: usize,
+        gate: &CsrMatrix<Qbit>,
+    ) -> Result<Self> {
+        let control = self.check_and_revsere_index(control)?;
+        let target = self.check_and_revsere_index(target)?;
+
+        if control == target {
+            return Err(anyhow::anyhow!(
+                "Control and target qubits cannot be the same"
+            ));
+        }
+
+        // |0><0|
+        let mut zero_zero = CooMatrix::new(2, 2);
+        zero_zero.push(0, 0, Complex::new(1.0, 0.0));
+        let zero_zero = CsrMatrix::from(&zero_zero);
+
+        // |1><1|
+        let mut one_one = CooMatrix::new(2, 2);
+        one_one.push(1, 1, Complex::new(1.0, 0.0));
+        let one_one = CsrMatrix::from(&one_one);
+
+        let id = CsrMatrix::identity(2);
+
+        let mut zero_matrix = CsrMatrix::identity(1);
+        let mut one_matrix = CsrMatrix::identity(1);
+        for i in 0..self.num_of_qbits {
+            if i == control {
+                zero_matrix = tensor_product(&zero_matrix, &zero_zero);
+                one_matrix = tensor_product(&one_matrix, &one_one);
+            } else if i == target {
+                zero_matrix = tensor_product(&zero_matrix, &id);
+                one_matrix = tensor_product(&one_matrix, gate);
+            } else {
+                zero_matrix = tensor_product(&zero_matrix, &id);
+                one_matrix = tensor_product(&one_matrix, &id);
+            }
+        }
+
+        let matrix = zero_matrix + one_matrix;
+        self.add_gate(matrix);
+        Ok(self)
+    }
+
+    pub fn cnot(self, control: usize, target: usize) -> Result<Self> {
+        self.control(control, target, &build_x_matrix())
+    }
+
+    pub fn swap(self, index1: usize, index2: usize) -> Result<Self> {
+        let index1 = self.check_and_revsere_index(index1)?;
+        let index2 = self.check_and_revsere_index(index2)?;
+
+        if index1 == index2 {
+            return Err(anyhow::anyhow!("Cannot swap a qubit with itself"));
+        }
+
+        self.cnot(index1, index2)?
+            .cnot(index2, index1)?
+            .cnot(index1, index2)
+    }
+
+    fn add_gate(&mut self, gate: CsrMatrix<Qbit>) {
+        self.gates.push(gate);
+    }
+
+    pub fn apply(&self, state: &QState) -> QState {
+        let mut result = state.state.clone();
+        for gate in &self.gates {
+            result = gate * result;
+        }
+        QState { state: result }
+    }
+}
+
+fn tensor_product(x: &CsrMatrix<Qbit>, y: &CsrMatrix<Qbit>) -> CsrMatrix<Qbit> {
+    let mut result = CooMatrix::new(x.nrows() * y.nrows(), x.ncols() * y.ncols());
+
+    for (rx, cx, value_x) in x.triplet_iter() {
+        for (ry, cy, value_y) in y.triplet_iter() {
+            let new_row = rx * y.nrows() + ry;
+            let new_col = cx * y.ncols() + cy;
+            let new_value = value_x * value_y;
+            result.push(new_row, new_col, new_value);
+        }
+    }
+
+    CsrMatrix::from(&result)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        approx_complex_eq,
+        gates::{build_s_matrix, build_t_matrix},
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_bell_state() -> Result<()> {
+        let q00 = QState::from_str("00").unwrap();
+        let result = Circuit::new(q00.num_of_qbits())
+            .H(0)?
+            .cnot(0, 1)?
+            .apply(&q00);
+
+        // Bell state |00> + |11>
+        approx_complex_eq!(1.0 / 2f64.sqrt(), 0.0, result.state[0]);
+        approx_complex_eq!(0.0, 0.0, result.state[1]);
+        approx_complex_eq!(0.0, 0.0, result.state[2]);
+        approx_complex_eq!(1.0 / 2f64.sqrt(), 0.0, result.state[3]);
+
+        Ok(())
+    }
+
+    #[test]
+    /// Hadamard test for Hadamard gate
+    /// https://dojo.qulacs.org/ja/latest/notebooks/2.2_Hadamard_test.html
+    fn test_hadamard_test() -> Result<()> {
+        let q00 = QState::from_str("00").unwrap();
+        let result = Circuit::new(q00.num_of_qbits())
+            .H(0)?
+            .control(0, 1, &build_hadamard_matrix())?
+            .H(0)?
+            .apply(&q00);
+
+        approx_complex_eq!((2f64.sqrt() + 2.0) / 4.0, 0.0, result.state[0]);
+        approx_complex_eq!((-2f64.sqrt() + 2.0) / 4.0, 0.0, result.state[1]);
+        approx_complex_eq!(2f64.sqrt() / 4.0, 0.0, result.state[2]);
+        approx_complex_eq!(-2f64.sqrt() / 4.0, 0.0, result.state[3]);
+
+        Ok(())
+    }
+
+    #[test]
+    /// Quantum Fourier Transform (QFT) for 3 qubits
+    /// https://dojo.qulacs.org/ja/latest/notebooks/2.3_quantum_Fourier_transform.html
+    fn test_qft() -> Result<()> {
+        let qstate = QState::new(&[Complex::new(1.0, 0.0) / 8.0_f64.sqrt(); 8])?;
+
+        let result = Circuit::new(qstate.num_of_qbits())
+            // First bit
+            .H(0)?
+            .control(1, 0, &build_s_matrix())?
+            .control(2, 0, &build_t_matrix())?
+            // Second bit
+            .H(1)?
+            .control(2, 1, &build_s_matrix())?
+            // Third bit
+            .H(2)?
+            .swap(0, 2)?
+            .apply(&qstate);
+
+        approx_complex_eq!(1.0, 0.0, result.state[0]);
+        approx_complex_eq!(0.0, 0.0, result.state[1]);
+        approx_complex_eq!(0.0, 0.0, result.state[2]);
+        approx_complex_eq!(0.0, 0.0, result.state[3]);
+        approx_complex_eq!(0.0, 0.0, result.state[4]);
+        approx_complex_eq!(0.0, 0.0, result.state[5]);
+        approx_complex_eq!(0.0, 0.0, result.state[6]);
+        approx_complex_eq!(0.0, 0.0, result.state[7]);
+
+        Ok(())
+    }
+}
