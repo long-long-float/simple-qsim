@@ -48,10 +48,16 @@ impl Display for QState {
     }
 }
 
+impl From<QState> for DVector<Qbit> {
+    fn from(qstate: QState) -> Self {
+        qstate.state
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::approx_complex_eq;
+    use crate::assert_approx_complex_eq;
 
     #[test]
     fn test_qstate_from_2bit_str() {
@@ -60,22 +66,22 @@ mod tests {
         assert_eq!(qstate.num_of_qbits(), 2);
         assert_eq!(qstate.state.len(), 4);
 
-        approx_complex_eq!(1.0, 0.0, qstate.state[0]);
-        approx_complex_eq!(0.0, 0.0, qstate.state[1]);
-        approx_complex_eq!(0.0, 0.0, qstate.state[2]);
-        approx_complex_eq!(0.0, 0.0, qstate.state[3]);
+        assert_approx_complex_eq!(1.0, 0.0, qstate.state[0]);
+        assert_approx_complex_eq!(0.0, 0.0, qstate.state[1]);
+        assert_approx_complex_eq!(0.0, 0.0, qstate.state[2]);
+        assert_approx_complex_eq!(0.0, 0.0, qstate.state[3]);
 
         let qstate = QState::from_str("01").unwrap();
-        approx_complex_eq!(0.0, 0.0, qstate.state[0]);
-        approx_complex_eq!(1.0, 0.0, qstate.state[1]);
-        approx_complex_eq!(0.0, 0.0, qstate.state[2]);
-        approx_complex_eq!(0.0, 0.0, qstate.state[3]);
+        assert_approx_complex_eq!(0.0, 0.0, qstate.state[0]);
+        assert_approx_complex_eq!(1.0, 0.0, qstate.state[1]);
+        assert_approx_complex_eq!(0.0, 0.0, qstate.state[2]);
+        assert_approx_complex_eq!(0.0, 0.0, qstate.state[3]);
 
         let qstate = QState::from_str("11").unwrap();
-        approx_complex_eq!(0.0, 0.0, qstate.state[0]);
-        approx_complex_eq!(0.0, 0.0, qstate.state[1]);
-        approx_complex_eq!(0.0, 0.0, qstate.state[2]);
-        approx_complex_eq!(1.0, 0.0, qstate.state[3]);
+        assert_approx_complex_eq!(0.0, 0.0, qstate.state[0]);
+        assert_approx_complex_eq!(0.0, 0.0, qstate.state[1]);
+        assert_approx_complex_eq!(0.0, 0.0, qstate.state[2]);
+        assert_approx_complex_eq!(1.0, 0.0, qstate.state[3]);
     }
 
     #[test]
@@ -85,6 +91,6 @@ mod tests {
         assert_eq!(qstate.num_of_qbits(), 3);
         assert_eq!(qstate.state.len(), 8);
 
-        approx_complex_eq!(1.0, 0.0, qstate.state[4]);
+        assert_approx_complex_eq!(1.0, 0.0, qstate.state[4]);
     }
 }

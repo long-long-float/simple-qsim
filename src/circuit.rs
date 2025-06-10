@@ -2,7 +2,7 @@ use anyhow::Result;
 use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
 use num_complex::Complex;
 
-use crate::gates::{build_hadamard_matrix, build_x_matrix};
+use crate::gates::{h_matrix, x_matrix};
 use crate::qstate::QState;
 use crate::Qbit;
 
@@ -47,7 +47,7 @@ impl Circuit {
 
     #[allow(non_snake_case)]
     pub fn H(self, index: usize) -> Result<Self> {
-        self.add_gate_at(index, build_hadamard_matrix())
+        self.add_gate_at(index, h_matrix())
     }
 
     pub fn control(
@@ -98,7 +98,7 @@ impl Circuit {
     }
 
     pub fn cnot(self, control: usize, target: usize) -> Result<Self> {
-        self.control(control, target, &build_x_matrix())
+        self.control(control, target, &x_matrix())
     }
 
     pub fn swap(self, index1: usize, index2: usize) -> Result<Self> {
@@ -145,8 +145,8 @@ fn tensor_product(x: &CsrMatrix<Qbit>, y: &CsrMatrix<Qbit>) -> CsrMatrix<Qbit> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        approx_complex_eq,
-        gates::{build_s_matrix, build_t_matrix},
+        assert_approx_complex_eq,
+        gates::{s_matrix, t_matrix},
     };
 
     use super::*;
@@ -160,10 +160,10 @@ mod tests {
             .apply(&q00);
 
         // Bell state |00> + |11>
-        approx_complex_eq!(1.0 / 2f64.sqrt(), 0.0, result.state[0]);
-        approx_complex_eq!(0.0, 0.0, result.state[1]);
-        approx_complex_eq!(0.0, 0.0, result.state[2]);
-        approx_complex_eq!(1.0 / 2f64.sqrt(), 0.0, result.state[3]);
+        assert_approx_complex_eq!(1.0 / 2f64.sqrt(), 0.0, result.state[0]);
+        assert_approx_complex_eq!(0.0, 0.0, result.state[1]);
+        assert_approx_complex_eq!(0.0, 0.0, result.state[2]);
+        assert_approx_complex_eq!(1.0 / 2f64.sqrt(), 0.0, result.state[3]);
 
         Ok(())
     }
@@ -175,14 +175,14 @@ mod tests {
         let q00 = QState::from_str("00").unwrap();
         let result = Circuit::new(q00.num_of_qbits())
             .H(0)?
-            .control(0, 1, &build_hadamard_matrix())?
+            .control(0, 1, &h_matrix())?
             .H(0)?
             .apply(&q00);
 
-        approx_complex_eq!((2f64.sqrt() + 2.0) / 4.0, 0.0, result.state[0]);
-        approx_complex_eq!((-2f64.sqrt() + 2.0) / 4.0, 0.0, result.state[1]);
-        approx_complex_eq!(2f64.sqrt() / 4.0, 0.0, result.state[2]);
-        approx_complex_eq!(-2f64.sqrt() / 4.0, 0.0, result.state[3]);
+        assert_approx_complex_eq!((2f64.sqrt() + 2.0) / 4.0, 0.0, result.state[0]);
+        assert_approx_complex_eq!((-2f64.sqrt() + 2.0) / 4.0, 0.0, result.state[1]);
+        assert_approx_complex_eq!(2f64.sqrt() / 4.0, 0.0, result.state[2]);
+        assert_approx_complex_eq!(-2f64.sqrt() / 4.0, 0.0, result.state[3]);
 
         Ok(())
     }
@@ -196,24 +196,24 @@ mod tests {
         let result = Circuit::new(qstate.num_of_qbits())
             // First bit
             .H(0)?
-            .control(1, 0, &build_s_matrix())?
-            .control(2, 0, &build_t_matrix())?
+            .control(1, 0, &s_matrix())?
+            .control(2, 0, &t_matrix())?
             // Second bit
             .H(1)?
-            .control(2, 1, &build_s_matrix())?
+            .control(2, 1, &s_matrix())?
             // Third bit
             .H(2)?
             .swap(0, 2)?
             .apply(&qstate);
 
-        approx_complex_eq!(1.0, 0.0, result.state[0]);
-        approx_complex_eq!(0.0, 0.0, result.state[1]);
-        approx_complex_eq!(0.0, 0.0, result.state[2]);
-        approx_complex_eq!(0.0, 0.0, result.state[3]);
-        approx_complex_eq!(0.0, 0.0, result.state[4]);
-        approx_complex_eq!(0.0, 0.0, result.state[5]);
-        approx_complex_eq!(0.0, 0.0, result.state[6]);
-        approx_complex_eq!(0.0, 0.0, result.state[7]);
+        assert_approx_complex_eq!(1.0, 0.0, result.state[0]);
+        assert_approx_complex_eq!(0.0, 0.0, result.state[1]);
+        assert_approx_complex_eq!(0.0, 0.0, result.state[2]);
+        assert_approx_complex_eq!(0.0, 0.0, result.state[3]);
+        assert_approx_complex_eq!(0.0, 0.0, result.state[4]);
+        assert_approx_complex_eq!(0.0, 0.0, result.state[5]);
+        assert_approx_complex_eq!(0.0, 0.0, result.state[6]);
+        assert_approx_complex_eq!(0.0, 0.0, result.state[7]);
 
         Ok(())
     }
