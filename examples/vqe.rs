@@ -1,3 +1,6 @@
+//! This example implements a Variational Quantum Eigensolver (VQE) using Powell's method.
+//! This is a port of https://dojo.qulacs.org/ja/latest/notebooks/5.1_variational_quantum_eigensolver.html
+
 use core::f64;
 use std::collections::VecDeque;
 
@@ -5,7 +8,7 @@ use anyhow::Result;
 use nalgebra::{Complex, DVector, Matrix4, Vector6};
 use rand::Rng;
 use simple_qsim::{
-    gates::{h_matrix, rx_matrix, rz_matrix, s_matrix, t_matrix},
+    gates::{rx_matrix, rz_matrix},
     Circuit, QState, Qbit,
 };
 
