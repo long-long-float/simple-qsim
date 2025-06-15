@@ -1,4 +1,5 @@
 use anyhow::Result;
+use nalgebra::DMatrix;
 use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
 use num_complex::Complex;
 
@@ -6,8 +7,13 @@ use crate::gates::{h_matrix, x_matrix};
 use crate::qstate::QState;
 use crate::Qbit;
 
+enum Gate {
+    Dence(DMatrix<Qbit>),
+    Sparse(CsrMatrix<Qbit>),
+}
+
 pub struct Circuit {
-    gates: Vec<CsrMatrix<Qbit>>,
+    gates: Vec<Gate>,
     num_of_qbits: usize,
 }
 
@@ -29,20 +35,35 @@ impl Circuit {
         Ok(self.num_of_qbits - 1 - index)
     }
 
-    pub fn add_gate_at(mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<Self> {
+    fn create_gate_for_index(
+        &self,
+        index: usize,
+        gate: &CsrMatrix<Qbit>,
+    ) -> Result<CsrMatrix<Qbit>> {
         let index = self.check_and_revsere_index(index)?;
 
         let mut matrix = CsrMatrix::identity(1);
         for i in 0..self.num_of_qbits {
             if i == index {
-                matrix = tensor_product(&matrix, &gate);
+                matrix = kronecker_product(&matrix, &gate);
             } else {
-                matrix = tensor_product(&matrix, &CsrMatrix::identity(2));
+                matrix = kronecker_product(&matrix, &CsrMatrix::identity(2));
             }
         }
 
-        self.add_gate(matrix);
+        Ok(matrix)
+    }
+
+    pub fn add_gate_at(mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<Self> {
+        let gate = self.create_gate_for_index(index, &gate)?;
+        self.add_gate(gate);
         Ok(self)
+    }
+
+    pub fn add_gate_at_mut(&mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<()> {
+        let gate = self.create_gate_for_index(index, &gate)?;
+        self.add_gate(gate);
+        Ok(())
     }
 
     #[allow(non_snake_case)]
@@ -81,14 +102,14 @@ impl Circuit {
         let mut one_matrix = CsrMatrix::identity(1);
         for i in 0..self.num_of_qbits {
             if i == control {
-                zero_matrix = tensor_product(&zero_matrix, &zero_zero);
-                one_matrix = tensor_product(&one_matrix, &one_one);
+                zero_matrix = kronecker_product(&zero_matrix, &zero_zero);
+                one_matrix = kronecker_product(&one_matrix, &one_one);
             } else if i == target {
-                zero_matrix = tensor_product(&zero_matrix, &id);
-                one_matrix = tensor_product(&one_matrix, gate);
+                zero_matrix = kronecker_product(&zero_matrix, &id);
+                one_matrix = kronecker_product(&one_matrix, gate);
             } else {
-                zero_matrix = tensor_product(&zero_matrix, &id);
-                one_matrix = tensor_product(&one_matrix, &id);
+                zero_matrix = kronecker_product(&zero_matrix, &id);
+                one_matrix = kronecker_product(&one_matrix, &id);
             }
         }
 
@@ -114,20 +135,31 @@ impl Circuit {
             .cnot(index1, index2)
     }
 
-    fn add_gate(&mut self, gate: CsrMatrix<Qbit>) {
-        self.gates.push(gate);
+    pub fn add_gate(&mut self, gate: CsrMatrix<Qbit>) {
+        self.gates.push(Gate::Sparse(gate));
+    }
+
+    pub fn add_dence_gate(&mut self, gate: DMatrix<Qbit>) {
+        self.gates.push(Gate::Dence(gate));
     }
 
     pub fn apply(&self, state: &QState) -> QState {
         let mut result = state.state.clone();
         for gate in &self.gates {
-            result = gate * result;
+            match gate {
+                Gate::Dence(dense_gate) => {
+                    result = dense_gate * result;
+                }
+                Gate::Sparse(sparse_gate) => {
+                    result = sparse_gate * result;
+                }
+            }
         }
         QState { state: result }
     }
 }
 
-fn tensor_product(x: &CsrMatrix<Qbit>, y: &CsrMatrix<Qbit>) -> CsrMatrix<Qbit> {
+pub fn kronecker_product(x: &CsrMatrix<Qbit>, y: &CsrMatrix<Qbit>) -> CsrMatrix<Qbit> {
     let mut result = CooMatrix::new(x.nrows() * y.nrows(), x.ncols() * y.ncols());
 
     for (rx, cx, value_x) in x.triplet_iter() {

@@ -23,6 +23,13 @@ impl QState {
         Ok(Self { state })
     }
 
+    pub fn zero_state(num_of_qbits: usize) -> Self {
+        let size = 2_usize.pow(num_of_qbits as u32);
+        let mut state = DVector::zeros(size);
+        state[0] = Complex::new(1.0, 0.0); // |0...0> state
+        Self { state }
+    }
+
     pub fn from_str(qbits: &str) -> Result<Self> {
         let index = usize::from_str_radix(qbits, 2)?;
         let mut state = DVector::zeros(2_usize.pow(qbits.len() as u32));
