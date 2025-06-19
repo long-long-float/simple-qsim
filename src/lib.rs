@@ -1,5 +1,6 @@
 pub mod circuit;
 pub mod gates;
+pub mod observable;
 pub mod qstate;
 pub mod test_util;
 
