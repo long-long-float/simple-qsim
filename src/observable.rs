@@ -6,10 +6,7 @@ use crate::{
     qstate::QState,
 };
 use anyhow::Result;
-use nalgebra_sparse::{
-    convert::serial::{convert_csr_dense, convert_dense_csr},
-    CsrMatrix,
-};
+use nalgebra_sparse::{convert::serial::convert_dense_csr, CsrMatrix};
 
 pub struct Observable {
     operators: Vec<PauliOperator>,
@@ -37,34 +34,6 @@ impl Observable {
         let mut expectation = 0.0;
 
         for operator in &self.operators {
-            let mut term = 0.0;
-            // for pauli_matrix in &operator.ops {
-            //     let index = pauli_matrix.index;
-            //     let kind = &pauli_matrix.kind;
-
-            //     let alpha = qstate
-            //         .state
-            //         .get(index)
-            //         .ok_or_else(|| anyhow::anyhow!("Index out of bounds for qstate"))?;
-            //     let beta = qstate
-            //         .state
-            //         .get(index + 1)
-            //         .ok_or_else(|| anyhow::anyhow!("Index out of bounds for qstate"))?;
-
-            //     match kind {
-            //         Pauli::I => {
-            //             // Identity does not change the expectation value
-            //         }
-            //         Pauli::X => term += 2.0 * (alpha.conj() * beta).re,
-            //         Pauli::Y => term += 2.0 * (alpha.conj() * beta).im,
-            //         Pauli::Z => {
-            //             let alpha = alpha.norm_sqr();
-            //             let beta = beta.norm_sqr();
-            //             term += alpha - beta;
-            //         }
-            //     }
-            // }
-
             let mut kinds = iter::repeat(Pauli::I)
                 .take(qstate.num_of_qbits())
                 .collect::<Vec<_>>();

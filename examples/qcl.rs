@@ -1,22 +1,15 @@
 //! This example implements a Quantum Circuit Learning (QCL)
 //! This is a port of https://dojo.qulacs.org/ja/latest/notebooks/5.2_Quantum_Circuit_Learning.html
 
-use core::{f64, time};
-use std::{
-    collections::{HashMap, VecDeque},
-    f64::consts::PI,
-};
+use core::f64;
+use std::f64::consts::PI;
 
 use anyhow::Result;
-use nalgebra::{Complex, DMatrix, DVector, Matrix1, Matrix2, Matrix4, MatrixN, SMatrix, Vector6};
-use nalgebra_sparse::convert::serial::convert_csr_dense;
-use nalgebra_sparse::CsrMatrix;
+use nalgebra::{Complex, DMatrix};
 use plotters::prelude::*;
-use rand::{distr, Rng};
-use rand_distr::num_traits::FromPrimitive;
+use rand::Rng;
 use simple_qsim::{
-    circuit::kronecker_product,
-    gates::{rx_matrix, ry_matrix, rz_matrix, x_matrix, z_matrix},
+    gates::{rx_matrix, ry_matrix, rz_matrix},
     Circuit, QState, Qbit,
 };
 
@@ -106,7 +99,7 @@ fn main() -> Result<()> {
     let mut u_out = Circuit::new(nqubit);
 
     let mut rng = rand::rng();
-    for d in 0..c_depth {
+    for _ in 0..c_depth {
         u_out.add_dence_gate(time_evol_op.clone());
         for i in 0..nqubit {
             // TODO: Support parameterized gates
