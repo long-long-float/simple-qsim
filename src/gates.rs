@@ -54,6 +54,13 @@ pub fn x_matrix() -> CsrMatrix<Qbit> {
     CsrMatrix::from(&x_coo)
 }
 
+pub fn y_matrix() -> CsrMatrix<Qbit> {
+    let mut y_coo = CooMatrix::new(2, 2);
+    y_coo.push(0, 1, Complex::new(0.0, -1.0));
+    y_coo.push(1, 0, Complex::new(0.0, 1.0));
+    CsrMatrix::from(&y_coo)
+}
+
 pub fn z_matrix() -> CsrMatrix<Qbit> {
     let mut z_coo = CooMatrix::new(2, 2);
     z_coo.push(0, 0, Complex::new(1.0, 0.0));

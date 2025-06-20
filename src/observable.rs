@@ -1,5 +1,15 @@
-use crate::qstate::QState;
+use std::iter;
+
+use crate::{
+    circuit::kronecker_product,
+    gates::{x_matrix, y_matrix, z_matrix},
+    qstate::QState,
+};
 use anyhow::Result;
+use nalgebra_sparse::{
+    convert::serial::{convert_csr_dense, convert_dense_csr},
+    CsrMatrix,
+};
 
 pub struct Observable {
     operators: Vec<PauliOperator>,
@@ -28,34 +38,66 @@ impl Observable {
 
         for operator in &self.operators {
             let mut term = 0.0;
-            for pauli_matrix in &operator.ops {
-                let index = pauli_matrix.index;
-                let kind = &pauli_matrix.kind;
+            // for pauli_matrix in &operator.ops {
+            //     let index = pauli_matrix.index;
+            //     let kind = &pauli_matrix.kind;
 
-                let alpha = qstate
-                    .state
-                    .get(index)
-                    .ok_or_else(|| anyhow::anyhow!("Index out of bounds for qstate"))?;
-                let beta = qstate
-                    .state
-                    .get(index + 1)
-                    .ok_or_else(|| anyhow::anyhow!("Index out of bounds for qstate"))?;
+            //     let alpha = qstate
+            //         .state
+            //         .get(index)
+            //         .ok_or_else(|| anyhow::anyhow!("Index out of bounds for qstate"))?;
+            //     let beta = qstate
+            //         .state
+            //         .get(index + 1)
+            //         .ok_or_else(|| anyhow::anyhow!("Index out of bounds for qstate"))?;
 
+            //     match kind {
+            //         Pauli::I => {
+            //             // Identity does not change the expectation value
+            //         }
+            //         Pauli::X => term += 2.0 * (alpha.conj() * beta).re,
+            //         Pauli::Y => term += 2.0 * (alpha.conj() * beta).im,
+            //         Pauli::Z => {
+            //             let alpha = alpha.norm_sqr();
+            //             let beta = beta.norm_sqr();
+            //             term += alpha - beta;
+            //         }
+            //     }
+            // }
+
+            let mut kinds = iter::repeat(Pauli::I)
+                .take(qstate.num_of_qbits())
+                .collect::<Vec<_>>();
+            for op in &operator.ops {
+                kinds[op.index] = op.kind;
+            }
+
+            let mut op = CsrMatrix::identity(1);
+            for kind in kinds.iter().rev() {
                 match kind {
                     Pauli::I => {
-                        // Identity does not change the expectation value
+                        op = kronecker_product(&op, &CsrMatrix::identity(2));
                     }
-                    Pauli::X => term += 2.0 * (alpha.conj() * beta).re,
-                    Pauli::Y => term += 2.0 * (alpha.conj() * beta).im,
+                    Pauli::X => {
+                        op = kronecker_product(&op, &x_matrix());
+                    }
+                    Pauli::Y => {
+                        op = kronecker_product(&op, &y_matrix());
+                    }
                     Pauli::Z => {
-                        let alpha = alpha.norm_sqr();
-                        let beta = beta.norm_sqr();
-                        term += alpha - beta;
+                        op = kronecker_product(&op, &z_matrix());
                     }
                 }
             }
 
-            expectation += operator.coefficient * term;
+            let qstate = convert_dense_csr(&qstate.state);
+            let exp = (qstate.transpose() * op * qstate)
+                .get_entry(0, 0)
+                .ok_or_else(|| anyhow::anyhow!("Failed to compute expectation value for operator"))?
+                .into_value()
+                .re;
+
+            expectation += operator.coefficient * exp;
         }
 
         Ok(expectation)
@@ -124,6 +166,23 @@ mod tests {
         assert_approx_eq!(0.0, expectation);
 
         let q1 = Circuit::new(1).H(0)?.apply(&q0);
+        let expectation = observable.expectation_value(&q1)?;
+        assert_approx_eq!(1.0, expectation);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_2qbit_xz_observable() -> Result<()> {
+        let q0 = QState::from_str("00").unwrap();
+
+        let mut observable = Observable::new();
+        observable.add_pauli_operator(1.0, &[(Pauli::X, 0), (Pauli::Z, 1)]);
+
+        let expectation = observable.expectation_value(&q0)?;
+        assert_approx_eq!(0.0, expectation);
+
+        let q1 = Circuit::new(q0.num_of_qbits()).H(0)?.apply(&q0);
         let expectation = observable.expectation_value(&q1)?;
         assert_approx_eq!(1.0, expectation);
 
