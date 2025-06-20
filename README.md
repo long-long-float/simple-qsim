@@ -1,5 +1,7 @@
 # simple-qsim
 
+[![Rust](https://github.com/long-long-float/simple-qsim/actions/workflows/rust.yml/badge.svg)](https://github.com/long-long-float/simple-qsim/actions/workflows/rust.yml)
+
 simple-qsim is a simple quantum circuit simulator written in Rust. It simulates quantum states with quantum gates with simple interface.
 
 ## Features
