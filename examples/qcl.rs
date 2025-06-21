@@ -1,7 +1,7 @@
 //! This example implements a Quantum Circuit Learning (QCL)
 //! This is a port of https://dojo.qulacs.org/ja/latest/notebooks/5.2_Quantum_Circuit_Learning.html
 
-use core::f64;
+use core::{f64, num};
 use std::f64::consts::PI;
 
 use anyhow::Result;
@@ -9,15 +9,13 @@ use nalgebra::{Complex, DMatrix};
 use plotters::prelude::*;
 use rand::Rng;
 use simple_qsim::{
+    circuit::ParameterizedGate,
     gates::{rx_matrix, ry_matrix, rz_matrix},
+    observable::{Observable, Pauli},
     Circuit, QState, Qbit,
 };
 
-fn prepare_train_data() -> Result<(Vec<f64>, Vec<f64>)> {
-    let x_min = -1.0;
-    let x_max = 1.0;
-    let num_x_train = 50;
-
+fn prepare_train_data(x_min: f64, x_max: f64, num_x_train: i32) -> Result<(Vec<f64>, Vec<f64>)> {
     fn func_to_learn(x: f64) -> f64 {
         (x * PI).sin()
     }
@@ -40,6 +38,24 @@ fn prepare_train_data() -> Result<(Vec<f64>, Vec<f64>)> {
 
 fn plot_data(x_data: &[f64], y_data: &[f64], file_name: &str) -> Result<()> {
     let root = BitMapBackend::new(file_name, (640, 480)).into_drawing_area();
+
+    let x_min = x_data
+        .iter()
+        .min_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+    let x_max = x_data
+        .iter()
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+    let y_min = y_data
+        .iter()
+        .min_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+    let y_max = y_data
+        .iter()
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+
     root.fill(&WHITE)?;
     let mut chart = ChartBuilder::on(&root)
         .x_label_area_size(30)
@@ -65,31 +81,72 @@ fn plot_data(x_data: &[f64], y_data: &[f64], file_name: &str) -> Result<()> {
     Ok(())
 }
 
+fn u_in(x: f64, nqubit: usize) -> Result<Circuit> {
+    let mut u = Circuit::new(nqubit);
+
+    let angle_y = x.asin();
+    let angle_z = (x * x).acos();
+
+    for i in 0..nqubit {
+        u.add_gate_at(i, ry_matrix(angle_y))?;
+        u.add_gate_at(i, rz_matrix(angle_z))?;
+    }
+
+    Ok(u)
+}
+
+fn qcl_pred(nqubit: usize, x: f64, u_out: &Circuit, obs: &Observable) -> Result<f64> {
+    let state = QState::zero_state(nqubit);
+    let state = u_in(x, nqubit)?.apply(&state);
+    let state = u_out.apply(&state);
+    obs.expectation_value(&state)
+}
+
+fn cost_func(
+    nqubit: usize,
+    theta: &[f64],
+    u_out: &mut Circuit,
+    x_train: &[f64],
+    y_train: &[f64],
+    obs: &Observable,
+) -> Result<f64> {
+    u_out.set_parameters(theta)?;
+
+    let y_pred = x_train.iter().map(|x| qcl_pred(nqubit, *x, u_out, obs));
+
+    let loss = y_pred
+        .zip(y_train.iter())
+        .map(|(pred, &y)| pred.map(|p| (p - y).powi(2)))
+        .sum::<Result<f64>>()?;
+
+    Ok(loss)
+}
+
+fn arange(start: f64, stop: f64, step: f64) -> Vec<f64> {
+    let mut arr = Vec::new();
+    let mut current = start;
+    while current < stop {
+        arr.push(current);
+        current += step;
+    }
+    arr
+}
+
 fn main() -> Result<()> {
     let nqubit = 3;
     let c_depth = 3;
     let time_step = 0.77;
 
+    let x_min = -1.0;
+    let x_max = 1.0;
+    let num_x_train = 50;
+
     // Prepare training data
-    let (x_train, y_train) = prepare_train_data()?;
+    let (x_train, y_train) = prepare_train_data(x_min, x_max, num_x_train)?;
     plot_data(&x_train, &y_train, "train.png")?;
 
     // Create initial state
     let state = QState::zero_state(nqubit);
-
-    fn u_in(x: f64, nqubit: usize) -> Result<Circuit> {
-        let mut u = Circuit::new(nqubit);
-
-        let angle_y = x.asin();
-        let angle_z = (x * x).acos();
-
-        for i in 0..nqubit {
-            u.add_gate_at(i, ry_matrix(angle_y))?;
-            u.add_gate_at(i, rz_matrix(angle_z))?;
-        }
-
-        Ok(u)
-    }
 
     // Check U_in
     // println!("{}", u_in(0.1, nqubit)?.apply(&state));
@@ -102,19 +159,27 @@ fn main() -> Result<()> {
     for _ in 0..c_depth {
         u_out.add_dence_gate(time_evol_op.clone());
         for i in 0..nqubit {
-            // TODO: Support parameterized gates
             let angle = 2.0 * PI * rng.random::<f64>();
-            u_out.add_gate_at(i, rx_matrix(angle))?;
+            u_out.add_parametric_gate_at(i, ParameterizedGate::RX, angle)?;
             let angle = 2.0 * PI * rng.random::<f64>();
-            u_out.add_gate_at(i, rz_matrix(angle))?;
+            u_out.add_parametric_gate_at(i, ParameterizedGate::RZ, angle)?;
             let angle = 2.0 * PI * rng.random::<f64>();
-            u_out.add_gate_at(i, rx_matrix(angle))?;
+            u_out.add_parametric_gate_at(i, ParameterizedGate::RX, angle)?;
         }
     }
 
-    // TODO: Support observables
-    // obs = Observable::new(nqubit)?;
-    // obs.add_operator(2.0, 'Z 0)?;
+    let theta = u_out.get_parameters();
+
+    let mut obs = Observable::new();
+    obs.add_pauli_operator(2.0, &[(Pauli::Z, 0)]);
+
+    // Create a list of x values for plotting predictions
+    let xlist: Vec<f64> = arange(x_min, x_max, 0.02);
+    let y_init = xlist
+        .iter()
+        .map(|&x| qcl_pred(nqubit, x, &u_out, &obs))
+        .collect::<Result<Vec<_>>>()?;
+    plot_data(&xlist, &y_init, "pred_init.png")?;
 
     Ok(())
 }
