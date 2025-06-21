@@ -8,6 +8,7 @@ use crate::{
 use anyhow::Result;
 use nalgebra_sparse::{convert::serial::convert_dense_csr, CsrMatrix};
 
+#[derive(Clone, Debug)]
 pub struct Observable {
     operators: Vec<PauliOperator>,
 }
@@ -73,6 +74,7 @@ impl Observable {
     }
 }
 
+#[derive(Clone, Debug)]
 struct PauliOperator {
     coefficient: f64,
     ops: Vec<PauliMatrix>,

@@ -1,19 +1,38 @@
 //! This example implements a Quantum Circuit Learning (QCL)
 //! This is a port of https://dojo.qulacs.org/ja/latest/notebooks/5.2_Quantum_Circuit_Learning.html
 
-use core::{f64, num};
+use core::f64;
 use std::f64::consts::PI;
 
 use anyhow::Result;
+use argmin::{
+    core::{CostFunction, Executor, State},
+    solver::neldermead::NelderMead,
+};
 use nalgebra::{Complex, DMatrix};
 use plotters::prelude::*;
 use rand::Rng;
 use simple_qsim::{
     circuit::ParameterizedGate,
-    gates::{rx_matrix, ry_matrix, rz_matrix},
+    gates::{ry_matrix, rz_matrix},
     observable::{Observable, Pauli},
     Circuit, QState, Qbit,
 };
+
+struct Qcl {
+    nqubit: usize,
+    x_train: Vec<f64>,
+    y_train: Vec<f64>,
+    obs: Observable,
+}
+impl CostFunction for Qcl {
+    type Param = Vec<f64>;
+    type Output = f64;
+
+    fn cost(&self, theta: &Self::Param) -> Result<Self::Output> {
+        cost_func(self.nqubit, theta, &self.x_train, &self.y_train, &self.obs)
+    }
+}
 
 fn prepare_train_data(x_min: f64, x_max: f64, num_x_train: i32) -> Result<(Vec<f64>, Vec<f64>)> {
     fn func_to_learn(x: f64) -> f64 {
@@ -39,19 +58,19 @@ fn prepare_train_data(x_min: f64, x_max: f64, num_x_train: i32) -> Result<(Vec<f
 fn plot_data(x_data: &[f64], y_data: &[f64], file_name: &str) -> Result<()> {
     let root = BitMapBackend::new(file_name, (640, 480)).into_drawing_area();
 
-    let x_min = x_data
+    let x_min = *x_data
         .iter()
         .min_by(|a, b| a.partial_cmp(b).unwrap())
         .unwrap();
-    let x_max = x_data
+    let x_max = *x_data
         .iter()
         .max_by(|a, b| a.partial_cmp(b).unwrap())
         .unwrap();
-    let y_min = y_data
+    let y_min = *y_data
         .iter()
         .min_by(|a, b| a.partial_cmp(b).unwrap())
         .unwrap();
-    let y_max = y_data
+    let y_max = *y_data
         .iter()
         .max_by(|a, b| a.partial_cmp(b).unwrap())
         .unwrap();
@@ -60,7 +79,7 @@ fn plot_data(x_data: &[f64], y_data: &[f64], file_name: &str) -> Result<()> {
     let mut chart = ChartBuilder::on(&root)
         .x_label_area_size(30)
         .y_label_area_size(30)
-        .build_cartesian_2d(-1f64..1f64, -1f64..1f64)?;
+        .build_cartesian_2d(x_min..x_max, y_min..y_max)?;
 
     chart.configure_mesh().draw()?;
 
@@ -73,8 +92,8 @@ fn plot_data(x_data: &[f64], y_data: &[f64], file_name: &str) -> Result<()> {
 
     chart
         .configure_series_labels()
-        .background_style(&WHITE.mix(0.8))
-        .border_style(&BLACK)
+        .background_style(WHITE.mix(0.8))
+        .border_style(BLACK)
         .draw()?;
 
     root.present()?;
@@ -95,6 +114,28 @@ fn u_in(x: f64, nqubit: usize) -> Result<Circuit> {
     Ok(u)
 }
 
+fn u_out(nqubit: usize) -> Result<Circuit> {
+    let c_depth = 3;
+    let time_evol_op = time_evol_op_for_3qubit();
+
+    let mut u_out = Circuit::new(nqubit);
+
+    let mut rng = rand::rng();
+    for _ in 0..c_depth {
+        u_out.add_dence_gate(time_evol_op.clone());
+        for i in 0..nqubit {
+            let angle = 2.0 * PI * rng.random::<f64>();
+            u_out.add_parametric_gate_at(i, ParameterizedGate::RX, angle)?;
+            let angle = 2.0 * PI * rng.random::<f64>();
+            u_out.add_parametric_gate_at(i, ParameterizedGate::RZ, angle)?;
+            let angle = 2.0 * PI * rng.random::<f64>();
+            u_out.add_parametric_gate_at(i, ParameterizedGate::RX, angle)?;
+        }
+    }
+
+    Ok(u_out)
+}
+
 fn qcl_pred(nqubit: usize, x: f64, u_out: &Circuit, obs: &Observable) -> Result<f64> {
     let state = QState::zero_state(nqubit);
     let state = u_in(x, nqubit)?.apply(&state);
@@ -105,14 +146,18 @@ fn qcl_pred(nqubit: usize, x: f64, u_out: &Circuit, obs: &Observable) -> Result<
 fn cost_func(
     nqubit: usize,
     theta: &[f64],
-    u_out: &mut Circuit,
+    // We cannot use &mut param here because cost function of argmin
+    // does not allow mutable references
+    // u_out: &mut Circuit,
     x_train: &[f64],
     y_train: &[f64],
     obs: &Observable,
 ) -> Result<f64> {
+    // u_out.set_parameters(theta)?;
+    let mut u_out = u_out(nqubit)?;
     u_out.set_parameters(theta)?;
 
-    let y_pred = x_train.iter().map(|x| qcl_pred(nqubit, *x, u_out, obs));
+    let y_pred = x_train.iter().map(|x| qcl_pred(nqubit, *x, &u_out, obs));
 
     let loss = y_pred
         .zip(y_train.iter())
@@ -134,8 +179,6 @@ fn arange(start: f64, stop: f64, step: f64) -> Vec<f64> {
 
 fn main() -> Result<()> {
     let nqubit = 3;
-    let c_depth = 3;
-    let time_step = 0.77;
 
     let x_min = -1.0;
     let x_max = 1.0;
@@ -145,29 +188,7 @@ fn main() -> Result<()> {
     let (x_train, y_train) = prepare_train_data(x_min, x_max, num_x_train)?;
     plot_data(&x_train, &y_train, "train.png")?;
 
-    // Create initial state
-    let state = QState::zero_state(nqubit);
-
-    // Check U_in
-    // println!("{}", u_in(0.1, nqubit)?.apply(&state));
-
-    let time_evol_op = time_evol_op_for_3qubit();
-
-    let mut u_out = Circuit::new(nqubit);
-
-    let mut rng = rand::rng();
-    for _ in 0..c_depth {
-        u_out.add_dence_gate(time_evol_op.clone());
-        for i in 0..nqubit {
-            let angle = 2.0 * PI * rng.random::<f64>();
-            u_out.add_parametric_gate_at(i, ParameterizedGate::RX, angle)?;
-            let angle = 2.0 * PI * rng.random::<f64>();
-            u_out.add_parametric_gate_at(i, ParameterizedGate::RZ, angle)?;
-            let angle = 2.0 * PI * rng.random::<f64>();
-            u_out.add_parametric_gate_at(i, ParameterizedGate::RX, angle)?;
-        }
-    }
-
+    let mut u_out = u_out(nqubit)?;
     let theta = u_out.get_parameters();
 
     let mut obs = Observable::new();
@@ -180,6 +201,44 @@ fn main() -> Result<()> {
         .map(|&x| qcl_pred(nqubit, x, &u_out, &obs))
         .collect::<Result<Vec<_>>>()?;
     plot_data(&xlist, &y_init, "pred_init.png")?;
+
+    let mut rng = rand::rng();
+    let theta_init = (0..(theta.len() + 1))
+        .map(|_| {
+            (0..theta.len())
+                .map(|_| rng.random::<f64>() * 2.0 * PI)
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    let problem = Qcl {
+        nqubit,
+        x_train: x_train.clone(),
+        y_train: y_train.clone(),
+        obs: obs.clone(),
+    };
+    let solver: NelderMead<Vec<f64>, f64> = NelderMead::new(theta_init);
+
+    println!("Training started...");
+
+    let res = Executor::new(problem, solver)
+        .configure(|state| state.max_iters(1000))
+        .run()?;
+
+    println!("{}", res);
+
+    let best_theta = res
+        .state
+        .get_best_param()
+        .ok_or_else(|| anyhow::anyhow!("No best parameter found in the optimization result"))?;
+    u_out.set_parameters(best_theta)?;
+
+    let xlist: Vec<f64> = arange(x_min, x_max, 0.02);
+    let y_init = xlist
+        .iter()
+        .map(|&x| qcl_pred(nqubit, x, &u_out, &obs))
+        .collect::<Result<Vec<_>>>()?;
+    plot_data(&xlist, &y_init, "result.png")?;
 
     Ok(())
 }
