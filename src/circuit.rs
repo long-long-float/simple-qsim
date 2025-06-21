@@ -54,13 +54,13 @@ impl Circuit {
         Ok(matrix)
     }
 
-    pub fn add_gate_at(mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<Self> {
+    pub fn gate_at(mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<Self> {
         let gate = self.create_gate_for_index(index, &gate)?;
         self.add_gate(gate);
         Ok(self)
     }
 
-    pub fn add_gate_at_mut(&mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<()> {
+    pub fn add_gate_at(&mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<()> {
         let gate = self.create_gate_for_index(index, &gate)?;
         self.add_gate(gate);
         Ok(())
@@ -68,7 +68,7 @@ impl Circuit {
 
     #[allow(non_snake_case)]
     pub fn H(self, index: usize) -> Result<Self> {
-        self.add_gate_at(index, h_matrix())
+        self.gate_at(index, h_matrix())
     }
 
     pub fn control(

@@ -15,13 +15,13 @@ use simple_qsim::{
 fn run_pqc_circuit(phi: &Vector6<f64>) -> Result<QState> {
     let q = QState::from_str("00")?;
     let circuit = Circuit::new(2)
-        .add_gate_at(0, rx_matrix(phi[0]))?
-        .add_gate_at(0, rz_matrix(phi[1]))?
-        .add_gate_at(1, rx_matrix(phi[2]))?
-        .add_gate_at(1, rz_matrix(phi[3]))?
+        .gate_at(0, rx_matrix(phi[0]))?
+        .gate_at(0, rz_matrix(phi[1]))?
+        .gate_at(1, rx_matrix(phi[2]))?
+        .gate_at(1, rz_matrix(phi[3]))?
         .cnot(1, 0)?
-        .add_gate_at(1, rz_matrix(phi[4]))?
-        .add_gate_at(1, rx_matrix(phi[5]))?;
+        .gate_at(1, rz_matrix(phi[4]))?
+        .gate_at(1, rx_matrix(phi[5]))?;
     Ok(circuit.apply(&q))
 }
 

@@ -84,8 +84,8 @@ fn main() -> Result<()> {
         let angle_z = (x * x).acos();
 
         for i in 0..nqubit {
-            u.add_gate_at_mut(i, ry_matrix(angle_y))?;
-            u.add_gate_at_mut(i, rz_matrix(angle_z))?;
+            u.add_gate_at(i, ry_matrix(angle_y))?;
+            u.add_gate_at(i, rz_matrix(angle_z))?;
         }
 
         Ok(u)
@@ -104,11 +104,11 @@ fn main() -> Result<()> {
         for i in 0..nqubit {
             // TODO: Support parameterized gates
             let angle = 2.0 * PI * rng.random::<f64>();
-            u_out.add_gate_at_mut(i, rx_matrix(angle))?;
+            u_out.add_gate_at(i, rx_matrix(angle))?;
             let angle = 2.0 * PI * rng.random::<f64>();
-            u_out.add_gate_at_mut(i, rz_matrix(angle))?;
+            u_out.add_gate_at(i, rz_matrix(angle))?;
             let angle = 2.0 * PI * rng.random::<f64>();
-            u_out.add_gate_at_mut(i, rx_matrix(angle))?;
+            u_out.add_gate_at(i, rx_matrix(angle))?;
         }
     }
 
