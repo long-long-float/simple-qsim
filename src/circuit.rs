@@ -3,7 +3,7 @@ use nalgebra::DMatrix;
 use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
 use num_complex::Complex;
 
-use crate::gates::{h_matrix, x_matrix};
+use crate::gates::{h_matrix, rx_matrix, ry_matrix, rz_matrix, x_matrix};
 use crate::qstate::QState;
 use crate::Qbit;
 
@@ -12,9 +12,24 @@ enum Gate {
     Sparse(CsrMatrix<Qbit>),
 }
 
+pub enum ParameterizedGate {
+    RX,
+    RY,
+    RZ,
+}
+
+struct Parameter {
+    gate_index: usize,
+    qbit_index: usize,
+    gate: ParameterizedGate,
+    value: f64,
+}
+
 pub struct Circuit {
     gates: Vec<Gate>,
     num_of_qbits: usize,
+
+    parameters: Vec<Parameter>,
 }
 
 impl Circuit {
@@ -22,6 +37,7 @@ impl Circuit {
         Self {
             gates: Vec::new(),
             num_of_qbits,
+            parameters: Vec::new(),
         }
     }
 
@@ -54,6 +70,19 @@ impl Circuit {
         Ok(matrix)
     }
 
+    fn create_parametric_gate_for_index(
+        &self,
+        param: &Parameter,
+        value: f64,
+    ) -> Result<CsrMatrix<Qbit>> {
+        let gate = match param.gate {
+            ParameterizedGate::RX => rx_matrix(value),
+            ParameterizedGate::RY => ry_matrix(value),
+            ParameterizedGate::RZ => rz_matrix(value),
+        };
+        self.create_gate_for_index(param.qbit_index, &gate)
+    }
+
     pub fn gate_at(mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<Self> {
         let gate = self.create_gate_for_index(index, &gate)?;
         self.add_gate(gate);
@@ -63,6 +92,60 @@ impl Circuit {
     pub fn add_gate_at(&mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<()> {
         let gate = self.create_gate_for_index(index, &gate)?;
         self.add_gate(gate);
+        Ok(())
+    }
+
+    pub fn add_parametric_gate_at(
+        &mut self,
+        index: usize,
+        gate: ParameterizedGate,
+        value: f64,
+    ) -> Result<()> {
+        let param = Parameter {
+            gate_index: self.gates.len(),
+            qbit_index: index,
+            gate,
+            value,
+        };
+        let gate = self.create_parametric_gate_for_index(&param, value)?;
+
+        self.parameters.push(param);
+        self.add_gate(gate);
+
+        Ok(())
+    }
+
+    pub fn get_parameters(&self) -> Vec<f64> {
+        self.parameters.iter().map(|param| param.value).collect()
+    }
+
+    pub fn set_parameter(&mut self, param_index: usize, value: f64) -> Result<()> {
+        if let Some(param) = self.parameters.get_mut(param_index) {
+            param.value = value;
+        } else {
+            return Err(anyhow::anyhow!("Parameter index out of bounds"));
+        };
+
+        // No index check is needed
+        let param = &self.parameters[param_index];
+
+        let gate = self.create_parametric_gate_for_index(param, value)?;
+        self.gates[param.gate_index] = Gate::Sparse(gate);
+
+        Ok(())
+    }
+
+    pub fn set_parameters(&mut self, values: &[f64]) -> Result<()> {
+        if values.len() != self.parameters.len() {
+            return Err(anyhow::anyhow!(
+                "Number of values does not match number of parameters"
+            ));
+        }
+
+        for (i, &value) in values.iter().enumerate() {
+            self.set_parameter(i, value)?;
+        }
+
         Ok(())
     }
 
@@ -176,6 +259,8 @@ pub fn kronecker_product(x: &CsrMatrix<Qbit>, y: &CsrMatrix<Qbit>) -> CsrMatrix<
 
 #[cfg(test)]
 mod tests {
+    use std::f64::consts::PI;
+
     use crate::{
         assert_approx_complex_eq,
         gates::{s_matrix, t_matrix},
@@ -246,6 +331,37 @@ mod tests {
         assert_approx_complex_eq!(0.0, 0.0, result.state[5]);
         assert_approx_complex_eq!(0.0, 0.0, result.state[6]);
         assert_approx_complex_eq!(0.0, 0.0, result.state[7]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parameterized_gate() -> Result<()> {
+        let q00 = QState::from_str("00").unwrap();
+        let mut circuit = Circuit::new(q00.num_of_qbits());
+        circuit.add_parametric_gate_at(0, ParameterizedGate::RX, PI)?;
+
+        let result = circuit.apply(&q00);
+
+        assert_approx_complex_eq!(0.0, 0.0, result.state[0]);
+        assert_approx_complex_eq!(0.0, -1.0, result.state[1]);
+
+        // Update the parameter to PI/2
+        let mut param = circuit.get_parameters();
+        assert_eq!(1, param.len());
+        assert_eq!(PI, param[0]);
+
+        param[0] = PI / 2.0;
+        circuit.set_parameters(&param)?;
+
+        let param = circuit.get_parameters();
+        assert_eq!(1, param.len());
+        assert_eq!(PI / 2.0, param[0]);
+
+        let result = circuit.apply(&q00);
+
+        assert_approx_complex_eq!(1.0 / 2f64.sqrt(), 0.0, result.state[0]);
+        assert_approx_complex_eq!(0.0, -1.0 / 2f64.sqrt(), result.state[1]);
 
         Ok(())
     }

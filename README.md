@@ -7,7 +7,8 @@ simple-qsim is a simple quantum circuit simulator written in Rust. It simulates 
 ## Features
 
 - Basic gates (X, H, CNOT, etc.)
-- Measure qubits and analyze results
+- Observable for Pauli operators (I, X, Y, Z)
+- Parametric gates for RX, RY, RZ
 
 ## Installation
 
@@ -35,7 +36,7 @@ println!("{}", bell_state);
 */
 ```
 
-For more examples, please see tests in [circuit.rs](./src/circuit.rs).
+For more examples, please see [examples directory](./examples/).
 
 ## License
 
