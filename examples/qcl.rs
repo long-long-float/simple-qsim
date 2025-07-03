@@ -138,8 +138,8 @@ fn u_out(nqubit: usize) -> Result<Circuit> {
 
 fn qcl_pred(nqubit: usize, x: f64, u_out: &Circuit, obs: &Observable) -> Result<f64> {
     let state = QState::zero_state(nqubit);
-    let state = u_in(x, nqubit)?.apply(&state);
-    let state = u_out.apply(&state);
+    let state = u_in(x, nqubit)?.apply(&state)?;
+    let state = u_out.apply(&state)?;
     obs.expectation_value(&state)
 }
 
@@ -233,12 +233,15 @@ fn main() -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("No best parameter found in the optimization result"))?;
     u_out.set_parameters(best_theta)?;
 
+    // TODO: Plot the training data in the same figure
     let xlist: Vec<f64> = arange(x_min, x_max, 0.02);
     let y_init = xlist
         .iter()
         .map(|&x| qcl_pred(nqubit, x, &u_out, &obs))
         .collect::<Result<Vec<_>>>()?;
     plot_data(&xlist, &y_init, "result.png")?;
+
+    println!("Training completed. Results saved to 'result.png'.");
 
     Ok(())
 }

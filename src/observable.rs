@@ -112,7 +112,7 @@ mod tests {
         let expectation = observable.expectation_value(&q0)?;
         assert_approx_eq!(1.0, expectation);
 
-        let q1 = Circuit::new(1).H(0)?.apply(&q0);
+        let q1 = Circuit::new(1).H(0)?.apply(&q0)?;
         let expectation = observable.expectation_value(&q1)?;
         assert_approx_eq!(0.0, expectation);
 
@@ -136,7 +136,7 @@ mod tests {
         let expectation = observable.expectation_value(&q0)?;
         assert_approx_eq!(0.0, expectation);
 
-        let q1 = Circuit::new(1).H(0)?.apply(&q0);
+        let q1 = Circuit::new(1).H(0)?.apply(&q0)?;
         let expectation = observable.expectation_value(&q1)?;
         assert_approx_eq!(1.0, expectation);
 
@@ -153,7 +153,7 @@ mod tests {
         let expectation = observable.expectation_value(&q0)?;
         assert_approx_eq!(0.0, expectation);
 
-        let q1 = Circuit::new(q0.num_of_qbits()).H(0)?.apply(&q0);
+        let q1 = Circuit::new(q0.num_of_qbits()).H(0)?.apply(&q0)?;
         let expectation = observable.expectation_value(&q1)?;
         assert_approx_eq!(1.0, expectation);
 

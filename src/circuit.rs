@@ -3,13 +3,35 @@ use nalgebra::DMatrix;
 use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
 use num_complex::Complex;
 
-use crate::gates::{h_matrix, rx_matrix, ry_matrix, rz_matrix, x_matrix};
+use crate::gates::{
+    h_matrix, rx_matrix, ry_matrix, rz_matrix, s_matrix, t_matrix, x_matrix, y_matrix, z_matrix,
+};
 use crate::qstate::QState;
 use crate::Qbit;
 
-enum Gate {
+pub enum Gate {
     Dence(DMatrix<Qbit>),
     Sparse(CsrMatrix<Qbit>),
+
+    H,
+    X,
+    Y,
+    Z,
+    S,
+    T,
+    RX(f64),
+    RY(f64),
+    RZ(f64),
+
+    Control {
+        control: usize,
+        target: usize,
+        gate: Box<Gate>,
+    },
+    CNot {
+        control: usize,
+        target: usize,
+    },
 }
 
 pub enum ParameterizedGate {
@@ -160,6 +182,17 @@ impl Circuit {
         target: usize,
         gate: &CsrMatrix<Qbit>,
     ) -> Result<Self> {
+        let matrix = self.build_control_matrix(control, target, gate)?;
+        self.add_gate(matrix);
+        Ok(self)
+    }
+
+    fn build_control_matrix(
+        &self,
+        control: usize,
+        target: usize,
+        gate: &CsrMatrix<Qbit>,
+    ) -> Result<CsrMatrix<Qbit>> {
         let control = self.check_and_revsere_index(control)?;
         let target = self.check_and_revsere_index(target)?;
 
@@ -196,9 +229,7 @@ impl Circuit {
             }
         }
 
-        let matrix = zero_matrix + one_matrix;
-        self.add_gate(matrix);
-        Ok(self)
+        Ok(zero_matrix + one_matrix)
     }
 
     pub fn cnot(self, control: usize, target: usize) -> Result<Self> {
@@ -226,7 +257,8 @@ impl Circuit {
         self.gates.push(Gate::Dence(gate));
     }
 
-    pub fn apply(&self, state: &QState) -> QState {
+    // TODO: Don't use Result type by checking errors in advance.
+    pub fn apply(&self, state: &QState) -> Result<QState> {
         let mut result = state.state.clone();
         for gate in &self.gates {
             match gate {
@@ -236,9 +268,42 @@ impl Circuit {
                 Gate::Sparse(sparse_gate) => {
                     result = sparse_gate * result;
                 }
+                gate => {
+                    let matrix = self.get_matrix_from_gate(gate)?;
+                    result = matrix * result;
+                }
             }
         }
-        QState { state: result }
+        Ok(QState { state: result })
+    }
+
+    fn get_matrix_from_gate(&self, gate: &Gate) -> Result<CsrMatrix<Qbit>> {
+        let matrix = match gate {
+            Gate::Dence(dense_gate) => CsrMatrix::from(dense_gate),
+            Gate::Sparse(sparse_gate) => sparse_gate.clone(),
+            Gate::H => h_matrix(),
+            Gate::X => x_matrix(),
+            Gate::Y => y_matrix(),
+            Gate::Z => z_matrix(),
+            Gate::S => s_matrix(),
+            Gate::T => t_matrix(),
+            Gate::RX(angle) => rx_matrix(*angle),
+            Gate::RY(angle) => ry_matrix(*angle),
+            Gate::RZ(angle) => rz_matrix(*angle),
+            Gate::Control {
+                control,
+                target,
+                gate,
+            } => {
+                let matrix = self.get_matrix_from_gate(gate)?;
+                self.build_control_matrix(*control, *target, &matrix)?
+            }
+            Gate::CNot { control, target } => {
+                let matrix = x_matrix();
+                self.build_control_matrix(*control, *target, &matrix)?
+            }
+        };
+        Ok(matrix)
     }
 }
 
@@ -274,7 +339,7 @@ mod tests {
         let result = Circuit::new(q00.num_of_qbits())
             .H(0)?
             .cnot(0, 1)?
-            .apply(&q00);
+            .apply(&q00)?;
 
         // Bell state |00> + |11>
         assert_approx_complex_eq!(1.0 / 2f64.sqrt(), 0.0, result.state[0]);
@@ -294,7 +359,7 @@ mod tests {
             .H(0)?
             .control(0, 1, &h_matrix())?
             .H(0)?
-            .apply(&q00);
+            .apply(&q00)?;
 
         assert_approx_complex_eq!((2f64.sqrt() + 2.0) / 4.0, 0.0, result.state[0]);
         assert_approx_complex_eq!((-2f64.sqrt() + 2.0) / 4.0, 0.0, result.state[1]);
@@ -321,7 +386,7 @@ mod tests {
             // Third bit
             .H(2)?
             .swap(0, 2)?
-            .apply(&qstate);
+            .apply(&qstate)?;
 
         assert_approx_complex_eq!(1.0, 0.0, result.state[0]);
         assert_approx_complex_eq!(0.0, 0.0, result.state[1]);
@@ -341,7 +406,7 @@ mod tests {
         let mut circuit = Circuit::new(q00.num_of_qbits());
         circuit.add_parametric_gate_at(0, ParameterizedGate::RX, PI)?;
 
-        let result = circuit.apply(&q00);
+        let result = circuit.apply(&q00)?;
 
         assert_approx_complex_eq!(0.0, 0.0, result.state[0]);
         assert_approx_complex_eq!(0.0, -1.0, result.state[1]);
@@ -358,7 +423,7 @@ mod tests {
         assert_eq!(1, param.len());
         assert_eq!(PI / 2.0, param[0]);
 
-        let result = circuit.apply(&q00);
+        let result = circuit.apply(&q00)?;
 
         assert_approx_complex_eq!(1.0 / 2f64.sqrt(), 0.0, result.state[0]);
         assert_approx_complex_eq!(0.0, -1.0 / 2f64.sqrt(), result.state[1]);

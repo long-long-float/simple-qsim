@@ -25,7 +25,7 @@ let q00 = QState::from_str("00").unwrap();
 let bell_state = Circuit::new(q00.num_of_qbits())
     .H(0)?
     .cnot(0, 1)?
-    .apply(&q00);
+    .apply(&q00)?;
 println!("{}", bell_state);
 
 /*
@@ -36,7 +36,18 @@ println!("{}", bell_state);
 */
 ```
 
-For more examples, please see [examples directory](./examples/).
+You can see some examples in [examples directory](./examples/):
+
+* [QCL](./examples/qcl.rs) Quantum Circuit learning
+    * Train sin function with noise.
+* [VQE](./examples/vqe.rs) Variational Quantum Eigensolver
+    * Seek the ground state energy of H-He+ (helium hydride ion)
+
+You can run examples by:
+
+```
+cargo run --example qcl
+```
 
 ## License
 

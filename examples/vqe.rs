@@ -22,7 +22,7 @@ fn run_pqc_circuit(phi: &Vector6<f64>) -> Result<QState> {
         .cnot(1, 0)?
         .gate_at(1, rz_matrix(phi[4]))?
         .gate_at(1, rx_matrix(phi[5]))?;
-    Ok(circuit.apply(&q))
+    circuit.apply(&q)
 }
 
 fn expect_val(operator: &Matrix4<Qbit>, state: &DVector<Qbit>) -> f64 {
