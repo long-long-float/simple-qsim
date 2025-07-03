@@ -13,7 +13,7 @@ use nalgebra::{Complex, DMatrix};
 use plotters::prelude::*;
 use rand::Rng;
 use simple_qsim::{
-    circuit::ParameterizedGate,
+    circuit::{GateIndex, ParameterizedGate},
     gates::{ry_matrix, rz_matrix},
     observable::{Observable, Pauli},
     Circuit, QState, Qbit,
@@ -107,8 +107,8 @@ fn u_in(x: f64, nqubit: usize) -> Result<Circuit> {
     let angle_z = (x * x).acos();
 
     for i in 0..nqubit {
-        u.add_gate_at(i, ry_matrix(angle_y))?;
-        u.add_gate_at(i, rz_matrix(angle_z))?;
+        u.add_sparse_gate_at(i, ry_matrix(angle_y))?;
+        u.add_sparse_gate_at(i, rz_matrix(angle_z))?;
     }
 
     Ok(u)
@@ -122,7 +122,7 @@ fn u_out(nqubit: usize) -> Result<Circuit> {
 
     let mut rng = rand::rng();
     for _ in 0..c_depth {
-        u_out.add_dence_gate(time_evol_op.clone());
+        u_out.add_dence_gate(time_evol_op.clone(), GateIndex::All);
         for i in 0..nqubit {
             let angle = 2.0 * PI * rng.random::<f64>();
             u_out.add_parametric_gate_at(i, ParameterizedGate::RX, angle)?;

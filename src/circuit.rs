@@ -9,7 +9,18 @@ use crate::gates::{
 use crate::qstate::QState;
 use crate::Qbit;
 
-pub enum Gate {
+pub struct Gate {
+    kind: GateKind,
+    index: GateIndex,
+}
+
+pub enum GateIndex {
+    All,
+    One(usize),
+    Control { controls: Vec<usize>, target: usize },
+}
+
+pub enum GateKind {
     Dence(DMatrix<Qbit>),
     Sparse(CsrMatrix<Qbit>),
 
@@ -26,7 +37,7 @@ pub enum Gate {
     Control {
         control: usize,
         target: usize,
-        gate: Box<Gate>,
+        gate: Box<GateKind>,
     },
     CNot {
         control: usize,
@@ -105,15 +116,15 @@ impl Circuit {
         self.create_gate_for_index(param.qbit_index, &gate)
     }
 
-    pub fn gate_at(mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<Self> {
+    pub fn sparse_gate_at(mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<Self> {
         let gate = self.create_gate_for_index(index, &gate)?;
-        self.add_gate(gate);
+        self.add_gate(gate, index);
         Ok(self)
     }
 
-    pub fn add_gate_at(&mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<()> {
+    pub fn add_sparse_gate_at(&mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<()> {
         let gate = self.create_gate_for_index(index, &gate)?;
-        self.add_gate(gate);
+        self.add_gate(gate, index);
         Ok(())
     }
 
@@ -132,7 +143,7 @@ impl Circuit {
         let gate = self.create_parametric_gate_for_index(&param, value)?;
 
         self.parameters.push(param);
-        self.add_gate(gate);
+        self.add_gate(gate, index);
 
         Ok(())
     }
@@ -152,7 +163,10 @@ impl Circuit {
         let param = &self.parameters[param_index];
 
         let gate = self.create_parametric_gate_for_index(param, value)?;
-        self.gates[param.gate_index] = Gate::Sparse(gate);
+        self.gates[param.gate_index] = Gate {
+            kind: GateKind::Sparse(gate),
+            index: GateIndex::One(param.qbit_index),
+        };
 
         Ok(())
     }
@@ -173,7 +187,7 @@ impl Circuit {
 
     #[allow(non_snake_case)]
     pub fn H(self, index: usize) -> Result<Self> {
-        self.gate_at(index, h_matrix())
+        self.sparse_gate_at(index, h_matrix())
     }
 
     pub fn control(
@@ -183,7 +197,7 @@ impl Circuit {
         gate: &CsrMatrix<Qbit>,
     ) -> Result<Self> {
         let matrix = self.build_control_matrix(control, target, gate)?;
-        self.add_gate(matrix);
+        self.add_gate(matrix, target);
         Ok(self)
     }
 
@@ -249,23 +263,29 @@ impl Circuit {
             .cnot(index1, index2)
     }
 
-    pub fn add_gate(&mut self, gate: CsrMatrix<Qbit>) {
-        self.gates.push(Gate::Sparse(gate));
+    pub fn add_gate(&mut self, gate: CsrMatrix<Qbit>, index: usize) {
+        self.gates.push(Gate {
+            kind: GateKind::Sparse(gate),
+            index: GateIndex::One(index),
+        });
     }
 
-    pub fn add_dence_gate(&mut self, gate: DMatrix<Qbit>) {
-        self.gates.push(Gate::Dence(gate));
+    pub fn add_dence_gate(&mut self, gate: DMatrix<Qbit>, index: GateIndex) {
+        self.gates.push(Gate {
+            kind: GateKind::Dence(gate),
+            index,
+        });
     }
 
     // TODO: Don't use Result type by checking errors in advance.
     pub fn apply(&self, state: &QState) -> Result<QState> {
         let mut result = state.state.clone();
-        for gate in &self.gates {
-            match gate {
-                Gate::Dence(dense_gate) => {
+        for Gate { kind, index } in &self.gates {
+            match kind {
+                GateKind::Dence(dense_gate) => {
                     result = dense_gate * result;
                 }
-                Gate::Sparse(sparse_gate) => {
+                GateKind::Sparse(sparse_gate) => {
                     result = sparse_gate * result;
                 }
                 gate => {
@@ -277,20 +297,20 @@ impl Circuit {
         Ok(QState { state: result })
     }
 
-    fn get_matrix_from_gate(&self, gate: &Gate) -> Result<CsrMatrix<Qbit>> {
+    fn get_matrix_from_gate(&self, gate: &GateKind) -> Result<CsrMatrix<Qbit>> {
         let matrix = match gate {
-            Gate::Dence(dense_gate) => CsrMatrix::from(dense_gate),
-            Gate::Sparse(sparse_gate) => sparse_gate.clone(),
-            Gate::H => h_matrix(),
-            Gate::X => x_matrix(),
-            Gate::Y => y_matrix(),
-            Gate::Z => z_matrix(),
-            Gate::S => s_matrix(),
-            Gate::T => t_matrix(),
-            Gate::RX(angle) => rx_matrix(*angle),
-            Gate::RY(angle) => ry_matrix(*angle),
-            Gate::RZ(angle) => rz_matrix(*angle),
-            Gate::Control {
+            GateKind::Dence(dense_gate) => CsrMatrix::from(dense_gate),
+            GateKind::Sparse(sparse_gate) => sparse_gate.clone(),
+            GateKind::H => h_matrix(),
+            GateKind::X => x_matrix(),
+            GateKind::Y => y_matrix(),
+            GateKind::Z => z_matrix(),
+            GateKind::S => s_matrix(),
+            GateKind::T => t_matrix(),
+            GateKind::RX(angle) => rx_matrix(*angle),
+            GateKind::RY(angle) => ry_matrix(*angle),
+            GateKind::RZ(angle) => rz_matrix(*angle),
+            GateKind::Control {
                 control,
                 target,
                 gate,
@@ -298,7 +318,7 @@ impl Circuit {
                 let matrix = self.get_matrix_from_gate(gate)?;
                 self.build_control_matrix(*control, *target, &matrix)?
             }
-            Gate::CNot { control, target } => {
+            GateKind::CNot { control, target } => {
                 let matrix = x_matrix();
                 self.build_control_matrix(*control, *target, &matrix)?
             }
