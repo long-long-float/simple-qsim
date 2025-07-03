@@ -109,6 +109,11 @@ impl Circuit {
         Ok(self)
     }
 
+    pub fn add_gate_at(&mut self, index: usize, gate: GateKind) -> Result<()> {
+        self.add_gate(gate, index);
+        Ok(())
+    }
+
     pub fn sparse_gate_at(mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<Self> {
         self.add_gate(GateKind::Sparse(gate), index);
         Ok(self)
@@ -178,7 +183,7 @@ impl Circuit {
 
     #[allow(non_snake_case)]
     pub fn H(self, index: usize) -> Result<Self> {
-        self.sparse_gate_at(index, h_matrix())
+        self.gate_at(index, GateKind::H)
     }
 
     pub fn control(mut self, control: usize, target: usize, kind: GateKind) -> Result<Self> {

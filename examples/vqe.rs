@@ -7,21 +7,18 @@ use std::collections::VecDeque;
 use anyhow::Result;
 use nalgebra::{Complex, DVector, Matrix4, Vector6};
 use rand::Rng;
-use simple_qsim::{
-    gates::{rx_matrix, rz_matrix},
-    Circuit, QState, Qbit,
-};
+use simple_qsim::{circuit::GateKind, Circuit, QState, Qbit};
 
 fn run_pqc_circuit(phi: &Vector6<f64>) -> Result<QState> {
     let q = QState::from_str("00")?;
     let circuit = Circuit::new(2)
-        .sparse_gate_at(0, rx_matrix(phi[0]))?
-        .sparse_gate_at(0, rz_matrix(phi[1]))?
-        .sparse_gate_at(1, rx_matrix(phi[2]))?
-        .sparse_gate_at(1, rz_matrix(phi[3]))?
+        .gate_at(0, GateKind::RX(phi[0]))?
+        .gate_at(0, GateKind::RZ(phi[1]))?
+        .gate_at(1, GateKind::RX(phi[2]))?
+        .gate_at(1, GateKind::RZ(phi[3]))?
         .cnot(1, 0)?
-        .sparse_gate_at(1, rz_matrix(phi[4]))?
-        .sparse_gate_at(1, rx_matrix(phi[5]))?;
+        .gate_at(1, GateKind::RZ(phi[4]))?
+        .gate_at(1, GateKind::RX(phi[5]))?;
     circuit.apply(&q)
 }
 

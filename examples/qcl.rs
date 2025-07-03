@@ -13,8 +13,7 @@ use nalgebra::{Complex, DMatrix};
 use plotters::prelude::*;
 use rand::Rng;
 use simple_qsim::{
-    circuit::{GateIndex, ParameterizedGate},
-    gates::{ry_matrix, rz_matrix},
+    circuit::{GateIndex, GateKind, ParameterizedGate},
     observable::{Observable, Pauli},
     Circuit, QState, Qbit,
 };
@@ -107,8 +106,8 @@ fn u_in(x: f64, nqubit: usize) -> Result<Circuit> {
     let angle_z = (x * x).acos();
 
     for i in 0..nqubit {
-        u.add_sparse_gate_at(i, ry_matrix(angle_y))?;
-        u.add_sparse_gate_at(i, rz_matrix(angle_z))?;
+        u.add_gate_at(i, GateKind::RY(angle_y))?;
+        u.add_gate_at(i, GateKind::RZ(angle_z))?;
     }
 
     Ok(u)
