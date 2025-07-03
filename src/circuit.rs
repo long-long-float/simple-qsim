@@ -96,21 +96,26 @@ impl Circuit {
         Ok(matrix)
     }
 
-    fn create_parametric_gate(&self, param: &Parameter, value: f64) -> CsrMatrix<Qbit> {
+    fn create_parametric_gate(&self, param: &Parameter, value: f64) -> GateKind {
         match param.gate {
-            ParameterizedGate::RX => rx_matrix(value),
-            ParameterizedGate::RY => ry_matrix(value),
-            ParameterizedGate::RZ => rz_matrix(value),
+            ParameterizedGate::RX => GateKind::RX(value),
+            ParameterizedGate::RY => GateKind::RY(value),
+            ParameterizedGate::RZ => GateKind::RZ(value),
         }
     }
 
-    pub fn sparse_gate_at(mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<Self> {
+    pub fn gate_at(mut self, index: usize, gate: GateKind) -> Result<Self> {
         self.add_gate(gate, index);
         Ok(self)
     }
 
+    pub fn sparse_gate_at(mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<Self> {
+        self.add_gate(GateKind::Sparse(gate), index);
+        Ok(self)
+    }
+
     pub fn add_sparse_gate_at(&mut self, index: usize, gate: CsrMatrix<Qbit>) -> Result<()> {
-        self.add_gate(gate, index);
+        self.add_gate(GateKind::Sparse(gate), index);
         Ok(())
     }
 
@@ -150,7 +155,7 @@ impl Circuit {
 
         let gate = self.create_parametric_gate(param, value);
         self.gates[param.gate_index] = Gate {
-            kind: GateKind::Sparse(gate),
+            kind: gate,
             index: GateIndex::One(param.qbit_index),
         };
 
@@ -176,14 +181,9 @@ impl Circuit {
         self.sparse_gate_at(index, h_matrix())
     }
 
-    pub fn control(
-        mut self,
-        control: usize,
-        target: usize,
-        gate: &CsrMatrix<Qbit>,
-    ) -> Result<Self> {
+    pub fn control(mut self, control: usize, target: usize, kind: GateKind) -> Result<Self> {
         self.gates.push(Gate {
-            kind: GateKind::Sparse(gate.clone()),
+            kind,
             index: GateIndex::Control {
                 controls: vec![control],
                 target,
@@ -241,7 +241,7 @@ impl Circuit {
     }
 
     pub fn cnot(self, control: usize, target: usize) -> Result<Self> {
-        self.control(control, target, &x_matrix())
+        self.control(control, target, GateKind::X)
     }
 
     pub fn swap(self, index1: usize, index2: usize) -> Result<Self> {
@@ -257,9 +257,9 @@ impl Circuit {
             .cnot(index1, index2)
     }
 
-    pub fn add_gate(&mut self, gate: CsrMatrix<Qbit>, index: usize) {
+    pub fn add_gate(&mut self, kind: GateKind, index: usize) {
         self.gates.push(Gate {
-            kind: GateKind::Sparse(gate),
+            kind,
             index: GateIndex::One(index),
         });
     }
@@ -329,10 +329,7 @@ pub fn kronecker_product(x: &CsrMatrix<Qbit>, y: &CsrMatrix<Qbit>) -> CsrMatrix<
 mod tests {
     use std::f64::consts::PI;
 
-    use crate::{
-        assert_approx_complex_eq,
-        gates::{s_matrix, t_matrix},
-    };
+    use crate::assert_approx_complex_eq;
 
     use super::*;
 
@@ -360,7 +357,7 @@ mod tests {
         let q00 = QState::from_str("00").unwrap();
         let result = Circuit::new(q00.num_of_qbits())
             .H(0)?
-            .control(0, 1, &h_matrix())?
+            .control(0, 1, GateKind::H)?
             .H(0)?
             .apply(&q00)?;
 
@@ -381,11 +378,11 @@ mod tests {
         let result = Circuit::new(qstate.num_of_qbits())
             // First bit
             .H(0)?
-            .control(1, 0, &s_matrix())?
-            .control(2, 0, &t_matrix())?
+            .control(1, 0, GateKind::S)?
+            .control(2, 0, GateKind::T)?
             // Second bit
             .H(1)?
-            .control(2, 1, &s_matrix())?
+            .control(2, 1, GateKind::S)?
             // Third bit
             .H(2)?
             .swap(0, 2)?
