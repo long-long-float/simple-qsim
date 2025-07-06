@@ -12,6 +12,12 @@ pub fn h_matrix() -> CsrMatrix<Qbit> {
     CsrMatrix::from(&hadamard_coo)
 }
 
+pub fn h_dence_matrix() -> Matrix2<Qbit> {
+    let root2 = 2.0_f64.sqrt();
+    let x = Complex::ONE / root2;
+    Matrix2::from_row_slice(&[x, x, x, -x])
+}
+
 pub fn rx_matrix(angle: f64) -> CsrMatrix<Qbit> {
     let angle = angle / 2.0;
     let cos = Complex::new(angle.cos(), 0.0);
@@ -80,4 +86,13 @@ pub fn t_matrix() -> CsrMatrix<Qbit> {
     t_coo.push(0, 0, Complex::new(1.0, 0.0));
     t_coo.push(1, 1, Complex::from_polar(1.0, std::f64::consts::FRAC_PI_4));
     CsrMatrix::from(&t_coo)
+}
+
+pub fn t_dence_matrix() -> Matrix2<Qbit> {
+    Matrix2::from_row_slice(&[
+        Complex::new(1.0, 0.0),
+        Complex::ZERO,
+        Complex::ZERO,
+        Complex::from_polar(1.0, std::f64::consts::FRAC_PI_4),
+    ])
 }

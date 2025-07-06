@@ -3,6 +3,7 @@ pub mod gates;
 pub mod observable;
 pub mod qstate;
 pub mod test_util;
+pub mod transpiler;
 
 use num_complex::Complex;
 
