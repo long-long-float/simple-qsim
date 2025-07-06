@@ -7,12 +7,22 @@ use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
 use num_complex::Complex;
 
 use crate::gates::{
-    h_dence_matrix, h_matrix, rx_matrix, ry_matrix, rz_matrix, s_matrix, t_dence_matrix, t_matrix,
-    x_matrix, y_matrix, z_matrix,
+    h_dence_matrix, h_matrix, rx_matrix, ry_matrix, rz_matrix, s_matrix, t_matrix, x_matrix,
+    y_matrix, z_matrix,
 };
 use crate::qstate::QState;
 use crate::Qbit;
 use nalgebra::ComplexField;
+
+/// Use T = Rz(π/4) definition
+pub fn t_dence_matrix() -> Matrix2<Qbit> {
+    Matrix2::from_row_slice(&[
+        Complex::from_polar(1.0, std::f64::consts::FRAC_PI_8),
+        Complex::ZERO,
+        Complex::ZERO,
+        Complex::from_polar(1.0, std::f64::consts::FRAC_PI_8),
+    ])
+}
 
 pub struct Net {}
 
@@ -25,7 +35,7 @@ impl Net {
         let mut gate_set = vec![h_dence_matrix(), t_dence_matrix()];
         let mut gate_labels = vec!['H', 'T'];
 
-        let mut gate_inverses = (0..gate_set.len() * 2).map(|_| 0).collect::<Vec<_>>();
+        let mut gate_inverses = (0..gate_set.len()).map(|_| 0).collect::<Vec<_>>();
 
         let su2_equiv = Su2Equiv::new(1e-15);
 
@@ -68,13 +78,16 @@ impl Net {
         let gate_orders = gate_set
             .iter()
             .map(|gate| {
-                let mut n = 0;
+                let mut n = 1;
                 let mut c = gate.clone();
 
                 while n < 50 && !su2_equiv.equals(&c, &id2) {
+                    println!("{}", c);
                     c *= gate;
                     n += 1;
                 }
+                println!("{}", c);
+                println!("------------");
 
                 if n == 50 {
                     -1
@@ -85,16 +98,16 @@ impl Net {
             .collect::<Vec<_>>();
 
         // Check variables
-        println!("{:?}", gate_set[0] * gate_set[gate_inverses[0]]);
-        println!("{:?}", gate_set[1] * gate_set[gate_inverses[1]]);
-        println!("{:?}", gate_set[2] * gate_set[gate_inverses[2]]);
-        println!("{:?}", gate_set[3] * gate_set[gate_inverses[3]]);
+        println!("{:?}", gate_set[0] * gate_set[gate_inverses[0]]); // H
+        println!("{:?}", gate_set[1] * gate_set[gate_inverses[1]]); // T
+        println!("{:?}", gate_set[2] * gate_set[gate_inverses[2]]); // t
 
         println!(
             "{}",
             gate_labels
                 .iter()
-                .map(|c| c.to_string())
+                .zip(gate_orders.iter())
+                .map(|(c, o)| format!("{}: {}", c, o))
                 .collect::<Vec<_>>()
                 .join(", ")
         );
@@ -136,6 +149,7 @@ impl Su2Equiv {
         dist < self.epsilon || dist > self.gamma
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

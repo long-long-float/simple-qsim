@@ -87,12 +87,3 @@ pub fn t_matrix() -> CsrMatrix<Qbit> {
     t_coo.push(1, 1, Complex::from_polar(1.0, std::f64::consts::FRAC_PI_4));
     CsrMatrix::from(&t_coo)
 }
-
-pub fn t_dence_matrix() -> Matrix2<Qbit> {
-    Matrix2::from_row_slice(&[
-        Complex::new(1.0, 0.0),
-        Complex::ZERO,
-        Complex::ZERO,
-        Complex::from_polar(1.0, std::f64::consts::FRAC_PI_4),
-    ])
-}
