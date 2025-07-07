@@ -48,14 +48,22 @@ pub fn t_dence_matrix() -> Matrix2<Qbit> {
 
 pub struct Net {
     knots: Vec<Knot>,
+    tile_width: f64,
+    g: i64,
+    su2net: HashMap<ICoord, Knot>,
 }
 
 impl Net {
-    pub fn new() -> Self {
-        Net { knots: Vec::new() }
+    pub fn new(tile_width: f64) -> Self {
+        Net {
+            knots: Vec::new(),
+            tile_width,
+            g: (2.0 / tile_width) as i64,
+            su2net: HashMap::new(),
+        }
     }
 
-    pub fn generate(self, max_length: usize) {
+    pub fn generate(&mut self, max_length: usize) {
         let mut gate_set = vec![h_dence_matrix(), t_dence_matrix()];
         let mut gate_labels = vec!['H', 'T'];
 
@@ -199,6 +207,7 @@ impl Net {
                 //         .join(""),
                 //     depth
                 // );
+                self.add(&products[depth], &word.iter().collect::<String>());
 
                 if depth < max_length - 1 {
                     depth += 1;
@@ -217,31 +226,100 @@ impl Net {
         }
     }
 
-    fn add(&mut self, u: &Matrix2<Qbit>, word: &str, l: i32) {
+    fn add(&mut self, u: &Matrix2<Qbit>, word: &str) {
         let knot = Knot {
             word: word.to_string(),
-            matrix: u.clone(),
+            matrix: *u,
         };
-        self.knots.push(knot);
+        self.knots.push(knot.clone());
 
-        for c in 0..16 {}
+        for c in 0..16 {
+            let uci = ICoord::from_matrix(u, c, self.g);
+            self.su2net.insert(uci, knot.clone());
+        }
     }
 }
 
 /// A 'knot' is a mildly amusing term for a point in a Net
+#[derive(Debug, Clone, PartialEq)]
 struct Knot {
     word: String,
     matrix: Matrix2<Qbit>,
 }
 
 /// Integer coordinates for an SU(2) matrix in 4D space
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 struct ICoord {
-    x: i32,
     t: i32,
-    z: i32,
+    x: i32,
     y: i32,
+    z: i32,
 }
 
 impl ICoord {
-    fn from_matrix(m: &Matrix2<Qbit>, corner: i32) -> Self {}
+    fn from_matrix(m: &Matrix2<Qbit>, corner: i32, g: i64) -> Self {
+        let g = g as f64;
+
+        let mut mc = ICoord::default();
+        let mc0 = m[(0, 0)].re;
+        let mc1 = -1.0 * m[(0, 1)].im;
+        let mc2 = m[(1, 0)].re;
+        let mc3 = m[(1, 1)].im;
+
+        if corner < 0 {
+            mc.t = (g * mc0 + 0.5).floor() as i32;
+            mc.x = (g * mc1 + 0.5).floor() as i32;
+            mc.y = (g * mc2 + 0.5).floor() as i32;
+            mc.z = (g * mc3 + 0.5).floor() as i32;
+        } else {
+            mc.t = if corner & 1 == 0 {
+                (g * mc0).ceil()
+            } else {
+                (g * mc0).floor()
+            } as i32;
+
+            mc.x = if corner & 2 == 0 {
+                (g * mc1).ceil()
+            } else {
+                (g * mc1).floor()
+            } as i32;
+
+            mc.y = if corner & 4 == 0 {
+                (g * mc2).ceil()
+            } else {
+                (g * mc2).floor()
+            } as i32;
+
+            mc.z = if corner & 8 == 0 {
+                (g * mc3).ceil()
+            } else {
+                (g * mc3).floor()
+            } as i32;
+        }
+
+        // We want the first non-zero coordinate to be > 0, so multiply by -I if
+        // necessary.
+
+        if mc.t < 0 {
+            mc.t *= -1;
+            mc.x *= -1;
+            mc.y *= -1;
+            mc.z *= -1;
+        } else if mc.t == 0 {
+            if mc.x < 0 {
+                mc.x *= -1;
+                mc.y *= -1;
+                mc.z *= -1;
+            } else if mc.x == 0 {
+                if mc.y < 0 {
+                    mc.y *= -1;
+                    mc.z *= -1;
+                } else if mc.y == 0 && mc.z < 0 {
+                    mc.z *= -1;
+                }
+            }
+        }
+
+        mc
+    }
 }

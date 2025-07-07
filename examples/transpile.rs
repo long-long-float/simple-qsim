@@ -7,7 +7,7 @@ use rand::Rng;
 use simple_qsim::{circuit::GateKind, net::Net, Circuit, QState, Qbit};
 
 fn main() -> Result<()> {
-    let net = Net::new();
+    let mut net = Net::new(0.18);
     net.generate(14);
 
     Ok(())
