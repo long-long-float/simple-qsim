@@ -46,11 +46,13 @@ pub fn t_dence_matrix() -> Matrix2<Qbit> {
     ])
 }
 
-pub struct Net {}
+pub struct Net {
+    knots: Vec<Knot>,
+}
 
 impl Net {
     pub fn new() -> Self {
-        Net {}
+        Net { knots: Vec::new() }
     }
 
     pub fn generate(self, max_length: usize) {
@@ -214,4 +216,32 @@ impl Net {
             }
         }
     }
+
+    fn add(&mut self, u: &Matrix2<Qbit>, word: &str, l: i32) {
+        let knot = Knot {
+            word: word.to_string(),
+            matrix: u.clone(),
+        };
+        self.knots.push(knot);
+
+        for c in 0..16 {}
+    }
+}
+
+/// A 'knot' is a mildly amusing term for a point in a Net
+struct Knot {
+    word: String,
+    matrix: Matrix2<Qbit>,
+}
+
+/// Integer coordinates for an SU(2) matrix in 4D space
+struct ICoord {
+    x: i32,
+    t: i32,
+    z: i32,
+    y: i32,
+}
+
+impl ICoord {
+    fn from_matrix(m: &Matrix2<Qbit>, corner: i32) -> Self {}
 }
