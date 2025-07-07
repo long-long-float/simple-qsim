@@ -19,7 +19,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use anyhow::Result;
 use nalgebra::{DMatrix, Matrix2};
@@ -112,9 +112,9 @@ impl Net {
                 println!("------------");
 
                 if n == 50 {
-                    -1
+                    None
                 } else {
-                    n
+                    Some(n)
                 }
             })
             .collect::<Vec<_>>();
@@ -129,11 +129,85 @@ impl Net {
             gate_labels
                 .iter()
                 .zip(gate_orders.iter())
-                .map(|(c, o)| format!("{}: {}", c, o))
+                .map(|(c, o)| format!("{}: {}", c, o.unwrap_or(0)))
                 .collect::<Vec<_>>()
                 .join(", ")
         );
 
         // And fill up the enet
+        let mut word = Vec::new();
+        let mut products = Vec::new();
+        let mut sequence = Vec::new();
+
+        let mut depth = 0;
+        loop {
+            if sequence.len() <= depth {
+                sequence.push(0);
+            } else {
+                sequence[depth] += 1;
+            }
+
+            // Append an extra symbol
+            if sequence[depth] < gate_set.len() {
+                // Check we're not following something with its inverse
+                if depth > 0 && sequence[depth - 1] == gate_inverses[sequence[depth]] {
+                    continue;
+                }
+
+                // Check we're not exceeding the order
+                if word.len() >= 1 {
+                    if let Some(order) = gate_orders[sequence[depth]] {
+                        let mut repeat = 1usize;
+                        while (depth as i32 - repeat as i32) >= 0
+                            && word[depth - repeat] == gate_labels[sequence[depth]]
+                            && repeat < order
+                        {
+                            repeat += 1;
+                        }
+
+                        if repeat >= order {
+                            continue;
+                        }
+                    }
+                }
+
+                // Calculate all products
+                let new_prod = if depth > 0 {
+                    products.last().unwrap() * &gate_set[sequence[depth]]
+                } else {
+                    gate_set[sequence[depth]].clone()
+                };
+                products.push(new_prod);
+
+                word.push(gate_labels[sequence[depth]]);
+
+                println!(
+                    "Adding {} at depth {}",
+                    word.iter()
+                        .map(|c| c.to_string())
+                        .collect::<Vec<_>>()
+                        .join(""),
+                    depth
+                );
+                let mut buf = String::new();
+                std::io::stdin()
+                    .read_line(&mut buf)
+                    .expect("Failed to read line");
+
+                if depth < max_length - 1 {
+                    depth += 1;
+                }
+            } else {
+                word.pop();
+                products.pop();
+                sequence.pop();
+
+                if depth == 0 {
+                    break;
+                }
+
+                depth -= 1;
+            }
+        }
     }
 }
