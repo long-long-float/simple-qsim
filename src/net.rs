@@ -177,22 +177,26 @@ impl Net {
                 } else {
                     gate_set[sequence[depth]].clone()
                 };
-                products.push(new_prod);
+                if products.len() > depth {
+                    products[depth] = new_prod;
+                } else {
+                    products.push(new_prod);
+                }
 
-                word.push(gate_labels[sequence[depth]]);
+                if word.len() > depth {
+                    word[depth] = gate_labels[sequence[depth]];
+                } else {
+                    word.push(gate_labels[sequence[depth]]);
+                }
 
-                println!(
-                    "Adding {} at depth {}",
-                    word.iter()
-                        .map(|c| c.to_string())
-                        .collect::<Vec<_>>()
-                        .join(""),
-                    depth
-                );
-                let mut buf = String::new();
-                std::io::stdin()
-                    .read_line(&mut buf)
-                    .expect("Failed to read line");
+                // println!(
+                //     "Adding {} at depth {}",
+                //     word.iter()
+                //         .map(|c| c.to_string())
+                //         .collect::<Vec<_>>()
+                //         .join(""),
+                //     depth
+                // );
 
                 if depth < max_length - 1 {
                     depth += 1;
