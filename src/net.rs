@@ -33,7 +33,7 @@ use crate::gates::{
 };
 use crate::qstate::QState;
 use crate::su2equiv::Su2Equiv;
-use crate::Qbit;
+use crate::{su2, Qbit};
 use nalgebra::ComplexField;
 
 /// Use T = Rz(π/4) definition
@@ -238,11 +238,39 @@ impl Net {
             self.su2net.insert(uci, knot.clone());
         }
     }
+
+    pub fn solovay_kitaev(&self, u: &Matrix2<Qbit>, depth: usize) -> Knot {
+        if depth == 0 {
+            Knot {
+                word: "I".to_string(),
+                matrix: Matrix2::identity(),
+            }
+            // self.nearest(u)
+        } else {
+            let ku = self.solovay_kitaev(u, depth - 1);
+            let (v, w) = su2::group_factor(&ku.matrix);
+
+            let kv = self.solovay_kitaev(&v, depth - 1);
+            let kw = self.solovay_kitaev(&w, depth - 1);
+
+            let kv_inv = kv.word.chars().rev().collect::<String>();
+            let kw_inv = kw.word.chars().rev().collect::<String>();
+
+            Knot {
+                word: format!("{}{}{}{}{}", kv.word, kw.word, kv_inv, kw_inv, ku.word),
+                matrix: kv.matrix
+                    * kw.matrix
+                    * kv.matrix.adjoint()
+                    * kw.matrix.adjoint()
+                    * ku.matrix,
+            }
+        }
+    }
 }
 
 /// A 'knot' is a mildly amusing term for a point in a Net
 #[derive(Debug, Clone, PartialEq)]
-struct Knot {
+pub struct Knot {
     word: String,
     matrix: Matrix2<Qbit>,
 }

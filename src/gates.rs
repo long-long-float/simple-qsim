@@ -2,6 +2,7 @@ use nalgebra::Matrix2;
 use nalgebra_sparse::convert::serial::convert_dense_coo;
 use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
 use num_complex::Complex;
+use rand_distr::num_traits::{ConstOne, ConstZero};
 
 use crate::Qbit;
 
@@ -60,6 +61,10 @@ pub fn x_matrix() -> CsrMatrix<Qbit> {
     CsrMatrix::from(&x_coo)
 }
 
+pub fn x_dence_matrix() -> Matrix2<Qbit> {
+    Matrix2::from_column_slice(&[Complex::ZERO, Complex::ONE, Complex::ONE, Complex::ZERO])
+}
+
 pub fn y_matrix() -> CsrMatrix<Qbit> {
     let mut y_coo = CooMatrix::new(2, 2);
     y_coo.push(0, 1, Complex::new(0.0, -1.0));
@@ -67,11 +72,29 @@ pub fn y_matrix() -> CsrMatrix<Qbit> {
     CsrMatrix::from(&y_coo)
 }
 
+pub fn y_dence_matrix() -> Matrix2<Qbit> {
+    Matrix2::from_column_slice(&[
+        Complex::ZERO,
+        Complex::new(0.0, -1.0),
+        Complex::new(0.0, 1.0),
+        Complex::ZERO,
+    ])
+}
+
 pub fn z_matrix() -> CsrMatrix<Qbit> {
     let mut z_coo = CooMatrix::new(2, 2);
     z_coo.push(0, 0, Complex::new(1.0, 0.0));
     z_coo.push(1, 1, Complex::new(-1.0, 0.0));
     CsrMatrix::from(&z_coo)
+}
+
+pub fn z_dence_matrix() -> Matrix2<Qbit> {
+    Matrix2::from_column_slice(&[
+        Complex::ONE,
+        Complex::ZERO,
+        Complex::ZERO,
+        Complex::new(-1.0, 0.0),
+    ])
 }
 
 pub fn s_matrix() -> CsrMatrix<Qbit> {
