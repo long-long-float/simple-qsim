@@ -369,3 +369,34 @@ impl ICoord {
         mc
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::assert_approx_complex_eq;
+
+    #[test]
+    fn test_net_solovay_kitaev_depth_0() -> Result<()> {
+        let mut net = Net::new(0.18);
+        net.generate(14);
+
+        test_matrix(&net, &h_dence_matrix(), "H")?;
+        test_matrix(&net, &h_dence_matrix().adjoint(), "H")?;
+
+        test_matrix(&net, &t_dence_matrix(), "T")?;
+        test_matrix(&net, &t_dence_matrix().adjoint(), "t")?;
+
+        fn test_matrix(net: &Net, u: &Matrix2<Qbit>, expected_word: &str) -> Result<()> {
+            let ska = net.solovay_kitaev(u, 0)?;
+            assert_eq!(expected_word, ska.word);
+            assert_approx_complex_eq!(u[(0, 0)].re, u[(0, 0)].im, ska.matrix[(0, 0)]);
+            assert_approx_complex_eq!(u[(0, 1)].re, u[(0, 1)].im, ska.matrix[(0, 1)]);
+            assert_approx_complex_eq!(u[(1, 0)].re, u[(1, 0)].im, ska.matrix[(1, 0)]);
+            assert_approx_complex_eq!(u[(1, 1)].re, u[(1, 1)].im, ska.matrix[(1, 1)]);
+
+            Ok(())
+        }
+
+        Ok(())
+    }
+}
