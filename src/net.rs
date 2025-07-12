@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 use std::collections::{HashMap, VecDeque};
+use std::vec;
 
 use anyhow::Result;
 use nalgebra::{DMatrix, Matrix2};
@@ -50,7 +51,9 @@ pub struct Net {
     knots: Vec<Knot>,
     tile_width: f64,
     g: i64,
-    su2net: HashMap<ICoord, Knot>,
+    su2net: HashMap<ICoord, Vec<Knot>>,
+
+    empty_knot_vec: Vec<Knot>,
 }
 
 impl Net {
@@ -60,6 +63,7 @@ impl Net {
             tile_width,
             g: (2.0 / tile_width) as i64,
             su2net: HashMap::new(),
+            empty_knot_vec: Vec::new(),
         }
     }
 
@@ -78,18 +82,9 @@ impl Net {
 
             let already_exists = gate_set.iter().position(|g| su2_equiv.equals(g, &inv));
             if let Some(index) = already_exists {
-                println!(
-                    "Found inverse of {} {} at index {}",
-                    gate_labels[i], i, index
-                );
                 gate_inverses[i] = index;
                 gate_inverses[index] = i;
             } else {
-                println!(
-                    "Adding inverse of {} at index {}",
-                    gate_labels[i],
-                    gate_set.len()
-                );
                 gate_set.push(inv);
                 gate_labels.push(gate_labels[i].to_lowercase().next().unwrap());
 
@@ -114,12 +109,9 @@ impl Net {
                 let mut c = gate.clone();
 
                 while n < 50 && !su2_equiv.equals(&c, &id2) {
-                    println!("{}", c);
                     c *= gate;
                     n += 1;
                 }
-                println!("{}", c);
-                println!("------------");
 
                 if n == 50 {
                     None
@@ -234,37 +226,63 @@ impl Net {
         self.knots.push(knot.clone());
 
         for c in 0..16 {
-            let uci = ICoord::from_matrix(u, c, self.g);
-            self.su2net.insert(uci, knot.clone());
+            let uci = ICoord::from_matrix(u, Some(c), self.g);
+            self.su2net
+                .entry(uci)
+                .and_modify(|knots| knots.push(knot.clone()))
+                .or_insert(vec![knot.clone()]);
         }
     }
 
-    pub fn solovay_kitaev(&self, u: &Matrix2<Qbit>, depth: usize) -> Knot {
+    pub fn solovay_kitaev(&self, u: &Matrix2<Qbit>, depth: usize) -> Result<Knot> {
         if depth == 0 {
-            Knot {
-                word: "I".to_string(),
-                matrix: Matrix2::identity(),
-            }
-            // self.nearest(u)
+            self.nearest(u)
         } else {
-            let ku = self.solovay_kitaev(u, depth - 1);
+            let ku = self.solovay_kitaev(u, depth - 1)?;
             let (v, w) = su2::group_factor(&ku.matrix);
 
-            let kv = self.solovay_kitaev(&v, depth - 1);
-            let kw = self.solovay_kitaev(&w, depth - 1);
+            let kv = self.solovay_kitaev(&v, depth - 1)?;
+            let kw = self.solovay_kitaev(&w, depth - 1)?;
 
             let kv_inv = kv.word.chars().rev().collect::<String>();
             let kw_inv = kw.word.chars().rev().collect::<String>();
 
-            Knot {
+            Ok(Knot {
                 word: format!("{}{}{}{}{}", kv.word, kw.word, kv_inv, kw_inv, ku.word),
                 matrix: kv.matrix
                     * kw.matrix
                     * kv.matrix.adjoint()
                     * kw.matrix.adjoint()
                     * ku.matrix,
+            })
+        }
+    }
+
+    fn get_knots(&self, k: &ICoord) -> &Vec<Knot> {
+        self.su2net.get(k).unwrap_or(&self.empty_knot_vec)
+    }
+
+    fn nearest(&self, u: &Matrix2<Qbit>) -> Result<Knot> {
+        let mut uc = ICoord::from_matrix(u, None, self.g);
+
+        if self.get_knots(&uc).is_empty() {
+            for corner in 0..16 {
+                uc = ICoord::from_matrix(u, Some(corner), self.g);
+                if !self.get_knots(&uc).is_empty() {
+                    break;
+                }
             }
         }
+
+        self.get_knots(&uc)
+            .iter()
+            .min_by(|a, b| {
+                su2::proj_trace_dist(u, &a.matrix)
+                    .partial_cmp(&su2::proj_trace_dist(u, &b.matrix))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("No knots found near the given matrix"))
     }
 }
 
@@ -285,7 +303,7 @@ struct ICoord {
 }
 
 impl ICoord {
-    fn from_matrix(m: &Matrix2<Qbit>, corner: i32, g: i64) -> Self {
+    fn from_matrix(m: &Matrix2<Qbit>, corner: Option<i32>, g: i64) -> Self {
         let g = g as f64;
 
         let mut mc = ICoord::default();
@@ -294,12 +312,7 @@ impl ICoord {
         let mc2 = m[(1, 0)].re;
         let mc3 = m[(1, 1)].im;
 
-        if corner < 0 {
-            mc.t = (g * mc0 + 0.5).floor() as i32;
-            mc.x = (g * mc1 + 0.5).floor() as i32;
-            mc.y = (g * mc2 + 0.5).floor() as i32;
-            mc.z = (g * mc3 + 0.5).floor() as i32;
-        } else {
+        if let Some(corner) = corner {
             mc.t = if corner & 1 == 0 {
                 (g * mc0).ceil()
             } else {
@@ -323,6 +336,11 @@ impl ICoord {
             } else {
                 (g * mc3).floor()
             } as i32;
+        } else {
+            mc.t = (g * mc0 + 0.5).floor() as i32;
+            mc.x = (g * mc1 + 0.5).floor() as i32;
+            mc.y = (g * mc2 + 0.5).floor() as i32;
+            mc.z = (g * mc3 + 0.5).floor() as i32;
         }
 
         // We want the first non-zero coordinate to be > 0, so multiply by -I if

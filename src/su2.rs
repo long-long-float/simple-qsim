@@ -38,6 +38,25 @@ pub fn group_factor(u: &Matrix2<Qbit>) -> (Matrix2<Qbit>, Matrix2<Qbit>) {
     (s * a * a_s, s * b * a_s)
 }
 
+/// 'Projective' trace distance between SU(2) matrices U,V
+pub fn proj_trace_dist(a: &Matrix2<Qbit>, b: &Matrix2<Qbit>) -> f64 {
+    let d = (a[(0, 0)].re - b[(0, 0)].re).powi(2)
+        + (a[(0, 1)].im - b[(0, 1)].im).powi(2)
+        + (a[(1, 0)].re - b[(1, 0)].re).powi(2)
+        + (a[(1, 1)].im - b[(1, 1)].im).powi(2);
+
+    let n = (a[(0, 0)].re + b[(0, 0)].re).powi(2)
+        + (a[(0, 1)].im + b[(0, 1)].im).powi(2)
+        + (a[(1, 0)].re + b[(1, 0)].re).powi(2)
+        + (a[(1, 1)].im + b[(1, 1)].im).powi(2);
+
+    if d < n {
+        d.sqrt()
+    } else {
+        n.sqrt()
+    }
+}
+
 fn x_group_factor(a: &Matrix2<Qbit>) -> (Matrix2<Qbit>, Matrix2<Qbit>) {
     let ac = mat_to_cart4(a);
 
