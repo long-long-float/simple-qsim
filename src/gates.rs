@@ -13,12 +13,6 @@ pub fn h_matrix() -> CsrMatrix<Qbit> {
     CsrMatrix::from(&hadamard_coo)
 }
 
-pub fn h_dence_matrix() -> Matrix2<Qbit> {
-    let root2 = 2.0_f64.sqrt();
-    let x = Complex::ONE / root2;
-    Matrix2::from_row_slice(&[x, x, x, -x])
-}
-
 pub fn rx_matrix(angle: f64) -> CsrMatrix<Qbit> {
     let angle = angle / 2.0;
     let cos = Complex::new(angle.cos(), 0.0);
@@ -30,6 +24,14 @@ pub fn rx_matrix(angle: f64) -> CsrMatrix<Qbit> {
     rx_coo.push(1, 0, sin);
     rx_coo.push(1, 1, cos);
     CsrMatrix::from(&rx_coo)
+}
+
+pub fn rx_dence_matrix(angle: f64) -> Matrix2<Qbit> {
+    let angle = angle / 2.0;
+    let cos = Complex::new(angle.cos(), 0.0);
+    let sin = Complex::new(0.0, -(angle.sin()));
+
+    Matrix2::from_column_slice(&[cos, sin, sin, cos])
 }
 
 pub fn ry_matrix(angle: f64) -> CsrMatrix<Qbit> {
@@ -47,11 +49,20 @@ pub fn ry_matrix(angle: f64) -> CsrMatrix<Qbit> {
 
 pub fn rz_matrix(angle: f64) -> CsrMatrix<Qbit> {
     let mut rz_coo = CooMatrix::new(2, 2);
-    rz_coo.push(0, 0, Complex::new(0.0, -angle / 2.0).exp());
-    rz_coo.push(0, 1, Complex::ZERO);
-    rz_coo.push(1, 0, Complex::ZERO);
-    rz_coo.push(1, 1, Complex::new(0.0, angle / 2.0).exp());
+    rz_coo.push(0, 0, Complex::from_polar(1.0, -angle / 2.0).exp());
+    // rz_coo.push(0, 1, Complex::ZERO);
+    // rz_coo.push(1, 0, Complex::ZERO);
+    rz_coo.push(1, 1, Complex::from_polar(1.0, angle / 2.0).exp());
     CsrMatrix::from(&rz_coo)
+}
+
+pub fn rz_dence_matrix(angle: f64) -> Matrix2<Qbit> {
+    Matrix2::from_column_slice(&[
+        Complex::from_polar(1.0, -angle / 2.0),
+        Complex::ZERO,
+        Complex::ZERO,
+        Complex::from_polar(1.0, angle / 2.0),
+    ])
 }
 
 pub fn x_matrix() -> CsrMatrix<Qbit> {

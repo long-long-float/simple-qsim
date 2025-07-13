@@ -59,7 +59,7 @@ impl Su2Equiv {
 
 #[cfg(test)]
 mod tests {
-    use crate::{gates::h_dence_matrix, net::t_dence_matrix};
+    use crate::net::{h_dence_matrix, t_dence_matrix};
 
     use super::*;
 
