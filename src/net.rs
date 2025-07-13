@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::ops::Index;
 use std::vec;
 
 use anyhow::{Ok, Result};
@@ -58,6 +59,10 @@ pub struct Net {
     g: i64,
     su2net: HashMap<ICoord, HashSet<Knot>>,
 
+    gate_set: Vec<Matrix2<Qbit>>,
+    gate_labels: Vec<char>,
+    gate_inverses: Vec<usize>,
+
     empty_knot_hash: HashSet<Knot>,
 }
 
@@ -68,46 +73,51 @@ impl Net {
             tile_width,
             g: (2.0 / tile_width) as i64,
             su2net: HashMap::new(),
+            gate_set: Vec::new(),
+            gate_labels: Vec::new(),
+            gate_inverses: Vec::new(),
             empty_knot_hash: HashSet::new(),
         }
     }
 
     pub fn generate(&mut self, max_length: usize) {
-        let mut gate_set = vec![h_dence_matrix(), t_dence_matrix()];
-        let mut gate_labels = vec!['H', 'T'];
+        self.gate_set = vec![h_dence_matrix(), t_dence_matrix()];
+        self.gate_labels = vec!['H', 'T'];
 
-        let mut gate_inverses = (0..gate_set.len()).map(|_| 0).collect::<Vec<_>>();
+        self.gate_inverses = (0..self.gate_set.len()).map(|_| 0).collect::<Vec<_>>();
 
         let su2_equiv = Su2Equiv::new(1e-15);
 
         // Add inverses
-        for i in 0..gate_set.len() {
-            let gate = &gate_set[i];
+        for i in 0..self.gate_set.len() {
+            let gate = &self.gate_set[i];
             let inv = gate.adjoint();
 
-            let already_exists = gate_set.iter().position(|g| su2_equiv.equals(g, &inv));
+            let already_exists = self.gate_set.iter().position(|g| su2_equiv.equals(g, &inv));
             if let Some(index) = already_exists {
-                gate_inverses[i] = index;
-                gate_inverses[index] = i;
+                self.gate_inverses[i] = index;
+                self.gate_inverses[index] = i;
             } else {
-                gate_set.push(inv);
-                gate_labels.push(gate_labels[i].to_lowercase().next().unwrap());
+                self.gate_set.push(inv);
+                self.gate_labels
+                    .push(self.gate_labels[i].to_lowercase().next().unwrap());
 
-                gate_inverses.push(i);
-                gate_inverses[i] = gate_inverses.len() - 1;
+                self.gate_inverses.push(i);
+                self.gate_inverses[i] = self.gate_inverses.len() - 1;
             }
         }
 
         // And match each label to its index in all these arrays
         let mut label_indieces = HashMap::new();
-        for (i, label) in gate_labels.iter().enumerate() {
+        for (i, label) in self.gate_labels.iter().enumerate() {
             label_indieces.insert(label, i);
         }
 
         // finally we need to work out the orders.
         // for our purposes we'll take any order over 50 to be infinite
         let id2 = Matrix2::identity();
-        let gate_orders = gate_set
+        let gate_orders = self
+            .gate_set
             .iter()
             .map(|gate| {
                 let mut n = 1;
@@ -127,22 +137,22 @@ impl Net {
             .collect::<Vec<_>>();
 
         // Check variables
-        println!("{}", gate_set[0]); // H
-        println!("{}", gate_set[1]); // T
-        println!("{}", gate_set[2]); // t
-        println!("{}", gate_set[0] * gate_set[gate_inverses[0]]); // H
-        println!("{}", gate_set[1] * gate_set[gate_inverses[1]]); // T
-        println!("{}", gate_set[2] * gate_set[gate_inverses[2]]); // t
+        // println!("{}", self.gate_set[0]); // H
+        // println!("{}", self.gate_set[1]); // T
+        // println!("{}", self.gate_set[2]); // t
+        // println!("{}", self.gate_set[0] * self.gate_set[self.gate_inverses[0]]); // H
+        // println!("{}", self.gate_set[1] * self.gate_set[self.gate_inverses[1]]); // T
+        // println!("{}", self.gate_set[2] * self.gate_set[self.gate_inverses[2]]); // t
 
-        println!(
-            "{}",
-            gate_labels
-                .iter()
-                .zip(gate_orders.iter())
-                .map(|(c, o)| format!("{}: {}", c, o.unwrap_or(0)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+        // println!(
+        //     "{}",
+        //     self.gate_labels
+        //         .iter()
+        //         .zip(gate_orders.iter())
+        //         .map(|(c, o)| format!("{}: {}", c, o.unwrap_or(0)))
+        //         .collect::<Vec<_>>()
+        //         .join(", ")
+        // );
 
         // And fill up the enet
         let mut word = Vec::new();
@@ -160,9 +170,9 @@ impl Net {
             }
 
             // Append an extra symbol
-            if sequence[depth] < gate_set.len() {
+            if sequence[depth] < self.gate_set.len() {
                 // Check we're not following something with its inverse
-                if depth > 0 && sequence[depth - 1] == gate_inverses[sequence[depth]] {
+                if depth > 0 && sequence[depth - 1] == self.gate_inverses[sequence[depth]] {
                     continue;
                 }
 
@@ -171,7 +181,7 @@ impl Net {
                     if let Some(order) = gate_orders[sequence[depth]] {
                         let mut repeat = 1usize;
                         while (depth as i32 - repeat as i32) >= 0
-                            && word[depth - repeat] == gate_labels[sequence[depth]]
+                            && word[depth - repeat] == self.gate_labels[sequence[depth]]
                             && repeat < order
                         {
                             repeat += 1;
@@ -185,9 +195,9 @@ impl Net {
 
                 // Calculate all products
                 let new_prod = if depth > 0 {
-                    products[depth - 1] * gate_set[sequence[depth]]
+                    products[depth - 1] * self.gate_set[sequence[depth]]
                 } else {
-                    gate_set[sequence[depth]]
+                    self.gate_set[sequence[depth]]
                 };
                 if products.len() > depth {
                     products[depth] = new_prod;
@@ -196,9 +206,9 @@ impl Net {
                 }
 
                 if word.len() > depth {
-                    word[depth] = gate_labels[sequence[depth]];
+                    word[depth] = self.gate_labels[sequence[depth]];
                 } else {
-                    word.push(gate_labels[sequence[depth]]);
+                    word.push(self.gate_labels[sequence[depth]]);
                 }
 
                 // println!(
@@ -262,6 +272,34 @@ impl Net {
         }
     }
 
+    pub fn evaluate(&self, word: &str) -> Result<Matrix2<Qbit>> {
+        let mut u = Matrix2::identity();
+
+        for c in word.chars() {
+            let index = self
+                .gate_labels
+                .iter()
+                .position(|&label| label == c)
+                .ok_or_else(|| anyhow::anyhow!("Unknown gate: {}", c))?;
+            u *= self.gate_set[index];
+        }
+
+        Ok(u)
+    }
+
+    pub fn invert(&self, word: &str) -> Result<String> {
+        let mut inv_word = String::new();
+        for c in word.chars().rev() {
+            let index = self
+                .gate_labels
+                .iter()
+                .position(|&label| label == c)
+                .ok_or_else(|| anyhow::anyhow!("Unknown gate: {}", c))?;
+            inv_word.push(self.gate_labels[self.gate_inverses[index]]);
+        }
+        Ok(inv_word)
+    }
+
     pub fn solovay_kitaev(&self, u: &Matrix2<Qbit>, depth: usize) -> Result<Knot> {
         if depth == 0 {
             self.nearest(u)
@@ -272,8 +310,8 @@ impl Net {
             let kv = self.solovay_kitaev(&v, depth - 1)?;
             let kw = self.solovay_kitaev(&w, depth - 1)?;
 
-            let kv_inv = kv.word.chars().rev().collect::<String>();
-            let kw_inv = kw.word.chars().rev().collect::<String>();
+            let kv_inv = self.invert(&kv.word)?;
+            let kw_inv = self.invert(&kw.word)?;
 
             Ok(Knot {
                 word: format!("{}{}{}{}{}", kv.word, kw.word, kv_inv, kw_inv, ku.word),
@@ -302,12 +340,6 @@ impl Net {
             }
         }
 
-        println!("Find knots near: {:?}", uc);
-        println!("Candidates:");
-        for knot in self.get_knots(&uc) {
-            // println!("{}", knot.word);
-        }
-
         let knot = self
             .get_knots(&uc)
             .iter()
@@ -318,8 +350,6 @@ impl Net {
             })
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("No knots found near the given matrix"))?;
-        println!("Nearest knot: {:?}", knot);
-        println!();
         Ok(knot)
     }
 }
@@ -423,7 +453,7 @@ impl ICoord {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::assert_approx_complex_eq;
+    use crate::{assert_approx_complex_eq, assert_approx_eq, assert_approx_matrix2_eq};
 
     #[test]
     fn test_net_solovay_kitaev_depth_0() -> Result<()> {
@@ -447,6 +477,35 @@ mod tests {
 
             Ok(())
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_net_evaluate() -> Result<()> {
+        let mut net = Net::new(0.18);
+        net.generate(14);
+
+        assert_eq!(h_dence_matrix(), net.evaluate("H")?);
+        assert_eq!(t_dence_matrix(), net.evaluate("T")?);
+
+        assert!(su2::equals_ignoring_global_phase(
+            &Matrix2::<Qbit>::identity(),
+            &net.evaluate("HH")?
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_net_invert() -> Result<()> {
+        let mut net = Net::new(0.18);
+        net.generate(14);
+        assert_eq!("H", net.invert("H")?);
+        assert_eq!("t", net.invert("T")?);
+        assert_eq!("HH", net.invert("HH")?);
+        assert_eq!("HtH", net.invert("HTH")?);
+        assert_eq!("tHt", net.invert("THT")?);
 
         Ok(())
     }

@@ -57,6 +57,10 @@ pub fn proj_trace_dist(a: &Matrix2<Qbit>, b: &Matrix2<Qbit>) -> f64 {
     }
 }
 
+pub fn equals_ignoring_global_phase(a: &Matrix2<Qbit>, b: &Matrix2<Qbit>) -> bool {
+    ((a.adjoint() * b).trace().norm() - 2.0).abs() < 1e-10
+}
+
 fn x_group_factor(a: &Matrix2<Qbit>) -> (Matrix2<Qbit>, Matrix2<Qbit>) {
     let ac = mat_to_cart4(a);
 

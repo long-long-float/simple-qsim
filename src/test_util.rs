@@ -39,3 +39,27 @@ macro_rules! assert_approx_eq {
         );
     }};
 }
+
+#[macro_export]
+macro_rules! assert_approx_matrix2_eq {
+    ($expected:expr, $actual:expr) => {{
+        #[inline(always)]
+        pub fn approx_eq(
+            expected: &nalgebra::Matrix2<Qbit>,
+            actual: &nalgebra::Matrix2<Qbit>,
+            eps: f64,
+        ) -> bool {
+            expected
+                .iter()
+                .zip(actual.iter())
+                .all(|(e, a)| (e.re - a.re).abs() < eps && (e.im - a.im).abs() < eps)
+        }
+
+        assert!(
+            approx_eq(&$expected, &$actual, 1e-10),
+            "Expected {:?}, but got {:?}",
+            $expected,
+            $actual
+        );
+    }};
+}
