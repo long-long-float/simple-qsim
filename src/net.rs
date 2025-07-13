@@ -149,6 +149,8 @@ impl Net {
         let mut products = Vec::new();
         let mut sequence = Vec::new();
 
+        let mut count = 3;
+
         let mut depth = 0;
         loop {
             if sequence.len() <= depth {
@@ -183,9 +185,9 @@ impl Net {
 
                 // Calculate all products
                 let new_prod = if depth > 0 {
-                    products.last().unwrap() * &gate_set[sequence[depth]]
+                    products[depth - 1] * gate_set[sequence[depth]]
                 } else {
-                    gate_set[sequence[depth]].clone()
+                    gate_set[sequence[depth]]
                 };
                 if products.len() > depth {
                     products[depth] = new_prod;
@@ -207,17 +209,28 @@ impl Net {
                 //         .join(""),
                 //     depth
                 // );
-                eprintln!(
-                    "{}, {}",
-                    word.iter().collect::<String>(),
-                    &products[depth][(0, 0)].re
-                );
+                // eprintln!(
+                //     "{}, {}",
+                //     word.iter().collect::<String>(),
+                //     &products[depth][(0, 0)].re
+                // );
                 self.add(&products[depth], &word.iter().collect::<String>());
 
                 if depth < max_length - 1 {
                     depth += 1;
                 }
             } else {
+                // if count > 0 {
+                //     eprintln!("Pop at depth {}", depth);
+                //     eprintln!("Word: {}", word.iter().collect::<String>());
+                //     eprintln!(
+                //         "Products: {:?}",
+                //         products.iter().map(|p| p[(0, 0)].re).collect::<Vec<_>>()
+                //     );
+                //     eprintln!("Sequence: {:?}", sequence);
+                //     count -= 1;
+                // }
+
                 word.pop();
                 products.pop();
                 sequence.pop();
