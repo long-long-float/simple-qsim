@@ -39,7 +39,7 @@ use nalgebra::ComplexField;
 /// Use T = Rz(π/4) definition
 pub fn t_dence_matrix() -> Matrix2<Qbit> {
     Matrix2::from_row_slice(&[
-        Complex::from_polar(1.0, std::f64::consts::FRAC_PI_8),
+        Complex::from_polar(1.0, -std::f64::consts::FRAC_PI_8),
         Complex::ZERO,
         Complex::ZERO,
         Complex::from_polar(1.0, std::f64::consts::FRAC_PI_8),
@@ -207,11 +207,11 @@ impl Net {
                 //         .join(""),
                 //     depth
                 // );
-                // eprintln!(
-                //     "{}, {}",
-                //     word.iter().collect::<String>(),
-                //     &products[depth][(0, 0)].re
-                // );
+                eprintln!(
+                    "{}, {}",
+                    word.iter().collect::<String>(),
+                    &products[depth][(0, 0)].re
+                );
                 self.add(&products[depth], &word.iter().collect::<String>());
 
                 if depth < max_length - 1 {
