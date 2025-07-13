@@ -19,23 +19,15 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::ops::Index;
+use std::collections::{HashMap, HashSet};
 use std::vec;
 
 use anyhow::{Ok, Result};
-use nalgebra::{DMatrix, Matrix2};
-use nalgebra_sparse::convert::serial::convert_csr_dense;
-use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
+use nalgebra::Matrix2;
 use num_complex::Complex;
 
-use crate::gates::{
-    h_matrix, rx_matrix, ry_matrix, rz_matrix, s_matrix, t_matrix, x_matrix, y_matrix, z_matrix,
-};
-use crate::qstate::QState;
 use crate::su2equiv::Su2Equiv;
 use crate::{su2, Qbit};
-use nalgebra::ComplexField;
 
 /// Use T = Rz(π/4) definition
 pub fn t_dence_matrix() -> Matrix2<Qbit> {
@@ -121,7 +113,7 @@ impl Net {
             .iter()
             .map(|gate| {
                 let mut n = 1;
-                let mut c = gate.clone();
+                let mut c = *gate;
 
                 while n < 50 && !su2_equiv.equals(&c, &id2) {
                     c *= gate;
@@ -159,8 +151,6 @@ impl Net {
         let mut products = Vec::new();
         let mut sequence = Vec::new();
 
-        let mut count = 3;
-
         let mut depth = 0;
         loop {
             if sequence.len() <= depth {
@@ -177,7 +167,7 @@ impl Net {
                 }
 
                 // Check we're not exceeding the order
-                if word.len() >= 1 {
+                if !word.is_empty() {
                     if let Some(order) = gate_orders[sequence[depth]] {
                         let mut repeat = 1usize;
                         while (depth as i32 - repeat as i32) >= 0
@@ -211,36 +201,12 @@ impl Net {
                     word.push(self.gate_labels[sequence[depth]]);
                 }
 
-                // println!(
-                //     "Adding {} at depth {}",
-                //     word.iter()
-                //         .map(|c| c.to_string())
-                //         .collect::<Vec<_>>()
-                //         .join(""),
-                //     depth
-                // );
-                // eprintln!(
-                //     "{}, {}",
-                //     word.iter().collect::<String>(),
-                //     &products[depth][(0, 0)].re
-                // );
                 self.add(&products[depth], &word.iter().collect::<String>());
 
                 if depth < max_length - 1 {
                     depth += 1;
                 }
             } else {
-                // if count > 0 {
-                //     eprintln!("Pop at depth {}", depth);
-                //     eprintln!("Word: {}", word.iter().collect::<String>());
-                //     eprintln!(
-                //         "Products: {:?}",
-                //         products.iter().map(|p| p[(0, 0)].re).collect::<Vec<_>>()
-                //     );
-                //     eprintln!("Sequence: {:?}", sequence);
-                //     count -= 1;
-                // }
-
                 word.pop();
                 products.pop();
                 sequence.pop();
@@ -453,7 +419,6 @@ impl ICoord {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_approx_complex_eq, assert_approx_eq, assert_approx_matrix2_eq};
 
     #[test]
     fn test_net_solovay_kitaev_depth_0() -> Result<()> {
@@ -469,11 +434,7 @@ mod tests {
         fn test_matrix(net: &Net, u: &Matrix2<Qbit>, expected_word: &str) -> Result<()> {
             let ska = net.solovay_kitaev(u, 0)?;
             assert_eq!(expected_word, ska.word);
-            // TODO: Enable them
-            // assert_approx_complex_eq!(u[(0, 0)].re, u[(0, 0)].im, ska.matrix[(0, 0)]);
-            // assert_approx_complex_eq!(u[(0, 1)].re, u[(0, 1)].im, ska.matrix[(0, 1)]);
-            // assert_approx_complex_eq!(u[(1, 0)].re, u[(1, 0)].im, ska.matrix[(1, 0)]);
-            // assert_approx_complex_eq!(u[(1, 1)].re, u[(1, 1)].im, ska.matrix[(1, 1)]);
+            assert!(su2::equals_ignoring_global_phase(u, &ska.matrix));
 
             Ok(())
         }

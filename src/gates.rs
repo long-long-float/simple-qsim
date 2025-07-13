@@ -2,7 +2,6 @@ use nalgebra::Matrix2;
 use nalgebra_sparse::convert::serial::convert_dense_coo;
 use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
 use num_complex::Complex;
-use rand_distr::num_traits::{ConstOne, ConstZero};
 
 use crate::Qbit;
 

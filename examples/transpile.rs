@@ -1,12 +1,7 @@
 use core::f64;
-use std::collections::VecDeque;
 
 use anyhow::Result;
-use nalgebra::{Complex, DVector, Matrix4, Vector6};
-use rand::Rng;
-use simple_qsim::{
-    circuit::GateKind, gates::rz_dence_matrix, net::Net, su2, Circuit, QState, Qbit,
-};
+use simple_qsim::{gates::rz_dence_matrix, net::Net, su2};
 
 fn main() -> Result<()> {
     let mut net = Net::new(0.18);
