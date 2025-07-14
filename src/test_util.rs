@@ -26,13 +26,16 @@ macro_rules! assert_approx_complex_eq {
 #[macro_export]
 macro_rules! assert_approx_eq {
     ($expected:expr, $actual:expr) => {{
+        assert_approx_eq!($expected, $actual, 1e-10)
+    }};
+    ($expected:expr, $actual:expr, $eps:expr) => {{
         #[inline(always)]
         pub fn approx_eq(expected: f64, actual: f64, eps: f64) -> bool {
             (expected - actual).abs() < eps
         }
 
         assert!(
-            approx_eq($expected, $actual, 1e-10),
+            approx_eq($expected, $actual, $eps),
             "Expected {}, but got {}",
             $expected,
             $actual

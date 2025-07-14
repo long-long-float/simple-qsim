@@ -57,6 +57,10 @@ pub fn proj_trace_dist(a: &Matrix2<Qbit>, b: &Matrix2<Qbit>) -> f64 {
     }
 }
 
+pub fn trace_norm(a: &Matrix2<Qbit>, b: &Matrix2<Qbit>) -> f64 {
+    (a.adjoint() * b).trace().norm()
+}
+
 pub fn equals_ignoring_global_phase(a: &Matrix2<Qbit>, b: &Matrix2<Qbit>) -> bool {
     ((a.adjoint() * b).trace().norm() - 2.0).abs() < 1e-10
 }

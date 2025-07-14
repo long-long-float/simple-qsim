@@ -72,6 +72,7 @@ impl Net {
         }
     }
 
+    /// TODO: Cache the generated su2net
     pub fn generate(&mut self, max_length: usize) {
         self.gate_set = vec![h_dence_matrix(), t_dence_matrix()];
         self.gate_labels = vec!['H', 'T'];
@@ -418,23 +419,54 @@ impl ICoord {
 
 #[cfg(test)]
 mod tests {
+    use core::f64;
+
+    use crate::{
+        assert_approx_eq,
+        gates::{rx_dence_matrix, ry_dence_matrix, rz_dence_matrix},
+    };
+
     use super::*;
 
     #[test]
-    fn test_net_solovay_kitaev_depth_0() -> Result<()> {
+    fn test_net_solovay_kitaev() -> Result<()> {
         let mut net = Net::new(0.18);
         net.generate(14);
 
-        test_matrix(&net, &h_dence_matrix(), "H")?;
-        test_matrix(&net, &h_dence_matrix().adjoint(), "H")?;
+        // Depth 0
+        let eps = 1e-10;
+        test_sk(&net, &h_dence_matrix(), Some("H"), 0, eps)?;
+        test_sk(&net, &h_dence_matrix().adjoint(), Some("H"), 0, eps)?;
 
-        test_matrix(&net, &t_dence_matrix(), "T")?;
-        test_matrix(&net, &t_dence_matrix().adjoint(), "t")?;
+        test_sk(&net, &t_dence_matrix(), Some("T"), 0, eps)?;
+        test_sk(&net, &t_dence_matrix().adjoint(), Some("t"), 0, eps)?;
 
-        fn test_matrix(net: &Net, u: &Matrix2<Qbit>, expected_word: &str) -> Result<()> {
-            let ska = net.solovay_kitaev(u, 0)?;
-            assert_eq!(expected_word, ska.word);
-            assert!(su2::equals_ignoring_global_phase(u, &ska.matrix));
+        // Depth 3
+        let eps = 0.1; // Accuracy is reduced for non fraction of PI
+        test_sk(&net, &rx_dence_matrix(0.1), None, 3, eps)?;
+        test_sk(&net, &ry_dence_matrix(0.1), None, 3, eps)?;
+        test_sk(&net, &rz_dence_matrix(0.1), None, 3, eps)?;
+        let eps = 1e-10;
+        test_sk(&net, &rx_dence_matrix(f64::consts::PI / 2.0), None, 3, eps)?;
+        test_sk(&net, &ry_dence_matrix(f64::consts::PI / 2.0), None, 3, eps)?;
+        test_sk(&net, &rz_dence_matrix(f64::consts::PI / 2.0), None, 3, eps)?;
+
+        fn test_sk(
+            net: &Net,
+            u: &Matrix2<Qbit>,
+            expected_word: Option<&str>,
+            depth: usize,
+            eps: f64,
+        ) -> Result<()> {
+            let ska = net.solovay_kitaev(u, depth)?;
+            let approx = net.evaluate(&ska.word)?;
+
+            if let Some(word) = expected_word {
+                assert_eq!(word, ska.word);
+            }
+            assert_approx_eq!(0.0, su2::proj_trace_dist(u, &ska.matrix), eps);
+            assert_approx_eq!(2.0, su2::trace_norm(u, &ska.matrix), eps);
+            assert_approx_eq!(2.0, su2::trace_norm(u, &approx), eps);
 
             Ok(())
         }

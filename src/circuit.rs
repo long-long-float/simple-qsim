@@ -1,11 +1,13 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use nalgebra::DMatrix;
 use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
 use num_complex::Complex;
 
 use crate::gates::{
-    h_matrix, rx_matrix, ry_matrix, rz_matrix, s_matrix, t_matrix, x_matrix, y_matrix, z_matrix,
+    h_matrix, inv_t_matrix, rx_matrix, ry_matrix, rz_dence_matrix, rz_matrix, s_matrix, t_matrix,
+    x_matrix, y_matrix, z_matrix,
 };
+use crate::net::{Knot, Net};
 use crate::qstate::QState;
 use crate::Qbit;
 
@@ -33,6 +35,7 @@ pub enum GateKind {
     Z,
     S,
     T,
+    InvT,
     RX(f64),
     RY(f64),
     RZ(f64),
@@ -276,6 +279,51 @@ impl Circuit {
         });
     }
 
+    pub fn transpile(&mut self) -> Result<()> {
+        let mut net = Net::new(0.18);
+        net.generate(14);
+
+        let sk_depth = 5;
+
+        fn get_gates_from_knot(knot: &Knot, index: GateIndex) -> Result<Vec<Gate>> {
+            knot.word
+                .chars()
+                .map(|w| {
+                    let kind = match w {
+                        'H' => GateKind::H,
+                        'T' => GateKind::T,
+                        't' => GateKind::InvT,
+                        _ => return Err(anyhow!("Unsupported gate: {}", w)),
+                    };
+                    Ok(Gate {
+                        kind,
+                        index: index.clone(),
+                    })
+                })
+                .collect::<Result<Vec<_>>>()
+        }
+
+        let mut new_gates = Vec::new();
+
+        for gate in &self.gates {
+            match &gate.kind {
+                GateKind::RZ(angle) => {
+                    let u = rz_dence_matrix(*angle);
+                    let compiled = net.solovay_kitaev(&u, sk_depth)?;
+                    let mut gates = get_gates_from_knot(&compiled, gate.index.clone())?;
+                    new_gates.append(&mut gates);
+                }
+                _ => {
+                    new_gates.push(gate.clone());
+                }
+            }
+        }
+
+        self.gates = new_gates;
+
+        Ok(())
+    }
+
     // TODO: Don't use Result type by checking errors in advance.
     pub fn apply(&self, state: &QState) -> Result<QState> {
         let mut result = state.state.clone();
@@ -307,6 +355,7 @@ impl Circuit {
             GateKind::Z => z_matrix(),
             GateKind::S => s_matrix(),
             GateKind::T => t_matrix(),
+            GateKind::InvT => inv_t_matrix(),
             GateKind::RX(angle) => rx_matrix(*angle),
             GateKind::RY(angle) => ry_matrix(*angle),
             GateKind::RZ(angle) => rz_matrix(*angle),

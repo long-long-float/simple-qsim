@@ -7,7 +7,7 @@ fn main() -> Result<()> {
     let mut net = Net::new(0.18);
     net.generate(14);
 
-    let u = rz_dence_matrix(f64::consts::PI / 2.0);
+    let u = rz_dence_matrix(1.0);
     println!("U = {}", u);
 
     let ska = net.solovay_kitaev(&u, 5)?;
@@ -21,8 +21,8 @@ fn main() -> Result<()> {
 
     println!("  {}", su2::proj_trace_dist(&ska.matrix, &approx));
 
-    println!("{}", su2::equals_ignoring_global_phase(&u, &ska.matrix));
-    println!("{}", su2::equals_ignoring_global_phase(&u, &approx));
+    println!("{}", su2::trace_norm(&u, &ska.matrix));
+    println!("{}", su2::trace_norm(&u, &approx));
 
     Ok(())
 }

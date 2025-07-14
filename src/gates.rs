@@ -46,6 +46,14 @@ pub fn ry_matrix(angle: f64) -> CsrMatrix<Qbit> {
     CsrMatrix::from(&ry_coo)
 }
 
+pub fn ry_dence_matrix(angle: f64) -> Matrix2<Qbit> {
+    let angle = angle / 2.0;
+    let cos = Complex::new(angle.cos(), 0.0);
+    let sin = Complex::new(angle.sin(), 0.0);
+
+    Matrix2::from_column_slice(&[cos, -sin, sin, cos])
+}
+
 pub fn rz_matrix(angle: f64) -> CsrMatrix<Qbit> {
     let mut rz_coo = CooMatrix::new(2, 2);
     rz_coo.push(0, 0, Complex::from_polar(1.0, -angle / 2.0).exp());
@@ -118,5 +126,12 @@ pub fn t_matrix() -> CsrMatrix<Qbit> {
     let mut t_coo = CooMatrix::new(2, 2);
     t_coo.push(0, 0, Complex::new(1.0, 0.0));
     t_coo.push(1, 1, Complex::from_polar(1.0, std::f64::consts::FRAC_PI_4));
+    CsrMatrix::from(&t_coo)
+}
+
+pub fn inv_t_matrix() -> CsrMatrix<Qbit> {
+    let mut t_coo = CooMatrix::new(2, 2);
+    t_coo.push(0, 0, Complex::new(1.0, 0.0));
+    t_coo.push(1, 1, Complex::from_polar(1.0, -std::f64::consts::FRAC_PI_4));
     CsrMatrix::from(&t_coo)
 }
