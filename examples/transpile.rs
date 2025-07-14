@@ -1,28 +1,23 @@
 use core::f64;
+use std::f64::consts::PI;
 
 use anyhow::Result;
-use simple_qsim::{gates::rz_dence_matrix, net::Net, su2};
+use simple_qsim::{
+    circuit::GateKind, gates::rz_dence_matrix, net::Net, qstate::QState, su2, Circuit,
+};
 
 fn main() -> Result<()> {
-    let mut net = Net::new(0.18);
-    net.generate(14);
+    let mut circuit = Circuit::new(2).H(0)?.gate_at(0, GateKind::RY(PI / 4.0))?;
+    let qs = QState::from_str("00")?;
 
-    let u = rz_dence_matrix(1.0);
-    println!("U = {}", u);
+    let result = circuit.apply(&qs)?;
+    println!("Resulting state: {}", result);
 
-    let ska = net.solovay_kitaev(&u, 5)?;
-    // println!("Solovay-Kitaev result: {:?}", ska);
-    println!("Matrix: {}", ska.matrix);
-    println!("Length of the sequence: {}", ska.word.len());
-    println!("accuracy: {}", su2::proj_trace_dist(&ska.matrix, &u));
+    circuit.transpile()?;
 
-    let approx = net.evaluate(&ska.word)?;
-    println!("Approximation result: {}", approx);
+    let result2 = circuit.apply(&qs)?;
 
-    println!("  {}", su2::proj_trace_dist(&ska.matrix, &approx));
-
-    println!("{}", su2::trace_norm(&u, &ska.matrix));
-    println!("{}", su2::trace_norm(&u, &approx));
+    println!("Resulting state after transpile: {}", result2);
 
     Ok(())
 }

@@ -4,8 +4,8 @@ use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
 use num_complex::Complex;
 
 use crate::gates::{
-    h_matrix, inv_t_matrix, rx_matrix, ry_matrix, rz_dence_matrix, rz_matrix, s_matrix, t_matrix,
-    x_matrix, y_matrix, z_matrix,
+    h_matrix, inv_t_matrix, rx_matrix, ry_dence_matrix, ry_matrix, rz_dence_matrix, rz_matrix,
+    s_matrix, t_matrix, x_matrix, y_matrix, z_matrix,
 };
 use crate::net::{Knot, Net};
 use crate::qstate::QState;
@@ -306,17 +306,18 @@ impl Circuit {
         let mut new_gates = Vec::new();
 
         for gate in &self.gates {
-            match &gate.kind {
-                GateKind::RZ(angle) => {
-                    let u = rz_dence_matrix(*angle);
-                    let compiled = net.solovay_kitaev(&u, sk_depth)?;
-                    let mut gates = get_gates_from_knot(&compiled, gate.index.clone())?;
-                    new_gates.append(&mut gates);
-                }
+            let u = match &gate.kind {
+                GateKind::RY(angle) => ry_dence_matrix(*angle),
+                GateKind::RZ(angle) => rz_dence_matrix(*angle),
                 _ => {
                     new_gates.push(gate.clone());
+                    continue;
                 }
-            }
+            };
+
+            let compiled = net.solovay_kitaev(&u, sk_depth)?;
+            let mut gates = get_gates_from_knot(&compiled, gate.index.clone())?;
+            new_gates.append(&mut gates);
         }
 
         self.gates = new_gates;
@@ -361,6 +362,21 @@ impl Circuit {
             GateKind::RZ(angle) => rz_matrix(*angle),
         };
         Ok(matrix)
+    }
+}
+
+impl std::fmt::Display for Circuit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for gate in &self.gates {
+            match &gate.index {
+                GateIndex::All => writeln!(f, "{:?}", gate.kind)?,
+                GateIndex::One(index) => writeln!(f, "{:?}({})", gate.kind, index)?,
+                GateIndex::Control { controls, target } => {
+                    writeln!(f, "{:?}({:?}, {})", gate.kind, controls, target)?
+                }
+            }
+        }
+        Ok(())
     }
 }
 
