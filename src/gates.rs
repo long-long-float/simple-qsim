@@ -122,6 +122,15 @@ pub fn s_matrix() -> CsrMatrix<Qbit> {
     CsrMatrix::from(&s_coo)
 }
 
+pub fn s_dence_matrix() -> Matrix2<Qbit> {
+    Matrix2::from_column_slice(&[
+        Complex::ONE,
+        Complex::ZERO,
+        Complex::ZERO,
+        Complex::new(0.0, 1.0),
+    ])
+}
+
 pub fn t_matrix() -> CsrMatrix<Qbit> {
     let mut t_coo = CooMatrix::new(2, 2);
     t_coo.push(0, 0, Complex::new(1.0, 0.0));

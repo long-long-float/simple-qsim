@@ -4,8 +4,9 @@ use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
 use num_complex::Complex;
 
 use crate::gates::{
-    h_matrix, inv_t_matrix, rx_matrix, ry_dence_matrix, ry_matrix, rz_dence_matrix, rz_matrix,
-    s_matrix, t_matrix, x_matrix, y_matrix, z_matrix,
+    h_matrix, inv_t_matrix, rx_dence_matrix, rx_matrix, ry_dence_matrix, ry_matrix,
+    rz_dence_matrix, rz_matrix, s_dence_matrix, s_matrix, t_matrix, x_dence_matrix, x_matrix,
+    y_dence_matrix, y_matrix, z_dence_matrix, z_matrix,
 };
 use crate::net::{Knot, Net};
 use crate::qstate::QState;
@@ -306,7 +307,18 @@ impl Circuit {
         let mut new_gates = Vec::new();
 
         for gate in &self.gates {
+            if !matches!(gate.index, GateIndex::One(_)) {
+                return Err(anyhow::anyhow!(
+                    "Only single qubit gates are supported for transpilation"
+                ));
+            }
+
             let u = match &gate.kind {
+                GateKind::S => s_dence_matrix(),
+                GateKind::X => x_dence_matrix(),
+                GateKind::Y => y_dence_matrix(),
+                GateKind::Z => z_dence_matrix(),
+                GateKind::RX(angle) => rx_dence_matrix(*angle),
                 GateKind::RY(angle) => ry_dence_matrix(*angle),
                 GateKind::RZ(angle) => rz_dence_matrix(*angle),
                 _ => {

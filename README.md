@@ -9,6 +9,8 @@ simple-qsim is a simple quantum circuit simulator written in Rust. It simulates 
 - Basic gates (X, H, CNOT, etc.)
 - Observable for Pauli operators (I, X, Y, Z)
 - Parametric gates for RX, RY, RZ
+- Transpiler by Solovay-Kitaev algorithm (Thanks to [sk](https://github.com/cmdawson/sk))
+    - Currently, single-qubit gates are supported.
 
 ## Installation
 
@@ -47,6 +49,12 @@ You can run examples by:
 
 ```
 cargo run --example qcl
+```
+
+## Test
+
+```
+cargo test
 ```
 
 ## License
