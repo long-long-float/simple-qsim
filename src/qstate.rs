@@ -48,7 +48,14 @@ impl Display for QState {
         let bin_width = self.num_of_qbits();
 
         for (i, value) in self.state.iter().enumerate() {
-            writeln!(f, "|{:0width$b}>: {}", i, value, width = bin_width)?;
+            writeln!(
+                f,
+                "|{:0width$b}>: {} ({})",
+                i,
+                value,
+                value.norm_sqr(),
+                width = bin_width
+            )?;
         }
 
         Ok(())

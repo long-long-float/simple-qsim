@@ -11,13 +11,13 @@ fn main() -> Result<()> {
     let qs = QState::from_str("00")?;
 
     let result = circuit.apply(&qs)?;
-    println!("Resulting state: {}", result);
+    println!("Resulting state:\n{}", result);
 
     circuit.transpile()?;
 
     let result2 = circuit.apply(&qs)?;
 
-    println!("Resulting state after transpile: {}", result2);
+    println!("Resulting state after transpile:\n{}", result2);
 
     Ok(())
 }
