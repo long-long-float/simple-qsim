@@ -47,7 +47,7 @@ pub fn h_dence_matrix() -> Matrix2<Qbit> {
 
 pub struct Net {
     knots: Vec<Knot>,
-    tile_width: f64,
+    // tile_width: f64,
     g: i64,
     su2net: HashMap<ICoord, HashSet<Knot>>,
 
@@ -62,7 +62,7 @@ impl Net {
     pub fn new(tile_width: f64) -> Self {
         Net {
             knots: Vec::new(),
-            tile_width,
+            // tile_width,
             g: (2.0 / tile_width) as i64,
             su2net: HashMap::new(),
             gate_set: Vec::new(),
