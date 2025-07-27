@@ -56,10 +56,8 @@ pub fn ry_dence_matrix(angle: f64) -> Matrix2<Qbit> {
 
 pub fn rz_matrix(angle: f64) -> CsrMatrix<Qbit> {
     let mut rz_coo = CooMatrix::new(2, 2);
-    rz_coo.push(0, 0, Complex::from_polar(1.0, -angle / 2.0).exp());
-    // rz_coo.push(0, 1, Complex::ZERO);
-    // rz_coo.push(1, 0, Complex::ZERO);
-    rz_coo.push(1, 1, Complex::from_polar(1.0, angle / 2.0).exp());
+    rz_coo.push(0, 0, Complex::from_polar(1.0, -angle / 2.0));
+    rz_coo.push(1, 1, Complex::from_polar(1.0, angle / 2.0));
     CsrMatrix::from(&rz_coo)
 }
 
@@ -70,6 +68,13 @@ pub fn rz_dence_matrix(angle: f64) -> Matrix2<Qbit> {
         Complex::ZERO,
         Complex::from_polar(1.0, angle / 2.0),
     ])
+}
+
+pub fn phase_matrix(angle: f64) -> CsrMatrix<Qbit> {
+    let mut phase_coo = CooMatrix::new(2, 2);
+    phase_coo.push(0, 0, Complex::ONE);
+    phase_coo.push(1, 1, Complex::from_polar(1.0, angle));
+    CsrMatrix::from(&phase_coo)
 }
 
 pub fn x_matrix() -> CsrMatrix<Qbit> {

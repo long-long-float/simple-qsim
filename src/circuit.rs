@@ -4,7 +4,7 @@ use nalgebra_sparse::{coo::CooMatrix, csr::CsrMatrix};
 use num_complex::Complex;
 
 use crate::gates::{
-    h_matrix, inv_t_matrix, rx_dence_matrix, rx_matrix, ry_dence_matrix, ry_matrix,
+    h_matrix, inv_t_matrix, phase_matrix, rx_dence_matrix, rx_matrix, ry_dence_matrix, ry_matrix,
     rz_dence_matrix, rz_matrix, s_dence_matrix, s_matrix, t_matrix, x_dence_matrix, x_matrix,
     y_dence_matrix, y_matrix, z_dence_matrix, z_matrix,
 };
@@ -40,6 +40,7 @@ pub enum GateKind {
     RX(f64),
     RY(f64),
     RZ(f64),
+    Phase(f64),
 }
 
 pub enum ParameterizedGate {
@@ -190,7 +191,7 @@ impl Circuit {
         self.gate_at(index, GateKind::H)
     }
 
-    pub fn control(mut self, control: usize, target: usize, kind: GateKind) -> Result<Self> {
+    pub fn add_control(&mut self, control: usize, target: usize, kind: GateKind) -> Result<()> {
         self.gates.push(Gate {
             kind,
             index: GateIndex::Control {
@@ -198,6 +199,11 @@ impl Circuit {
                 target,
             },
         });
+        Ok(())
+    }
+
+    pub fn control(mut self, control: usize, target: usize, kind: GateKind) -> Result<Self> {
+        self.add_control(control, target, kind)?;
         Ok(self)
     }
 
@@ -372,6 +378,7 @@ impl Circuit {
             GateKind::RX(angle) => rx_matrix(*angle),
             GateKind::RY(angle) => ry_matrix(*angle),
             GateKind::RZ(angle) => rz_matrix(*angle),
+            GateKind::Phase(angle) => phase_matrix(*angle),
         };
         Ok(matrix)
     }
