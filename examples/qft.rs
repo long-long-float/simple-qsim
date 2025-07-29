@@ -4,14 +4,9 @@ use anyhow::Result;
 use simple_qsim::{circuit::GateKind, Circuit, QState};
 
 fn main() -> Result<()> {
-    let num_of_qubits = 3;
+    let num_of_qubits = 8;
 
     let mut circuit = Circuit::new(num_of_qubits);
-
-    // Initialize input with H
-    for i in 0..num_of_qubits {
-        circuit.add_gate(GateKind::H, i);
-    }
 
     for i in (0..num_of_qubits).rev() {
         circuit.add_gate(GateKind::H, i);
@@ -21,9 +16,7 @@ fn main() -> Result<()> {
         }
     }
 
-    println!("Circuit:\n{}", circuit);
-
-    let qs = QState::from_str("000")?;
+    let qs = QState::zero_state(num_of_qubits);
 
     let result = circuit.apply(&qs)?;
     println!("Resulting state:\n{}", result);
